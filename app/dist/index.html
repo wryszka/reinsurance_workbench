@@ -209,16 +209,144 @@ async function loadAudit(){const id=$("#auditId").value;const d=await api("/gove
   $("#auditOut").innerHTML=rows;}
 
 // ─────────── Learn ───────────
-function learn(){const m=$("#main");
-  m.innerHTML=`<div class="eyebrow">Learn</div><h1>Reinsurance 101</h1>
-    <p class="sub">The treaty value chain and why the boundaries matter.</p>
-    <div class="card"><h3>The submission-to-bind lifecycle</h3>
-      <p>Submission (MRC slip + bordereaux + exposure) → triage / appetite → technical pricing → <b>marginal accumulation + capital</b> (the crux) → underwriter decision → bind. A deal can look attractive standalone and still be toxic in aggregate.</p></div>
-    <div class="grid g2" style="margin-top:16px">
-      <div class="card"><h3>Own the boundaries</h3><p class="muted">Bricksurance Re never rebuilds the cat engine or the placement network. It ingests vendor EP curves (blending vendors that disagree) and broker submissions, then enriches around them — accumulation, capital, governance.</p></div>
-      <div class="card"><h3>Why 1-in-200 matters</h3><p class="muted">The 1-in-200 (99.5th percentile, 1-year) PML is the Solvency II capital cross-link. Appetite, accumulation and the marginal SCR all hang off it.</p></div>
-    </div>
-    <div class="prov"><b>Built on.</b> Databricks medallion + DLT, Unity Catalog Feature Store, MLflow Model Serving, UC functions, Mosaic AI agents (Claude via Foundation Model API) and AI/BI Genie. See PROVENANCE_MAPPING.md.</div>`;}
+// ─────────── Learn — Reinsurance 101 (slide deck) ───────────
+const LC={v:'#6d28d9',b:'#2563eb',g:'#16a34a',a:'#d97706',r:'#dc2626',s:'#64748b'};
+function lcard(t,d,c){return `<div style="flex:1;min-width:150px;border:1px solid #e2e8f0;border-top:3px solid ${c};border-radius:10px;padding:11px 13px;background:#fff"><div style="font-weight:700;font-size:12.5px;color:#0f172a">${t}</div><div style="color:#64748b;font-size:12px;line-height:1.45;margin-top:4px">${d}</div></div>`;}
+function lrow(){return `<div style="display:flex;gap:10px;flex-wrap:wrap">${[].slice.call(arguments).join('')}</div>`;}
+function lnote(t){return `<div style="margin-top:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 13px;font-size:12.5px;color:#92400e">${t}</div>`;}
+function lflow(steps,c){return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${steps.map((s,i)=>`<span style="background:${c}15;color:${c};border:1px solid ${c}55;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">${s}</span>${i<steps.length-1?'<span style="color:#cbd5e1">→</span>':''}`).join('')}</div>`;}
+function lgrid(items){return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${items.map(c=>`<div style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 11px;background:#fff;font-size:12px"><b>${c[0]}</b><div class="muted" style="margin-top:2px">→ ${c[1]}</div></div>`).join('')}</div>`;}
+function valueChain(){const st=[['1','Submission','MRC slip · bordereaux · exposure','intake'],['2','Triage','in / out of appetite','sub/sub:900002'],['3','Price','technical rate-on-line','sub/sub:900002'],['4','Accumulation','PML vs appetite','sub/sub:900002'],['5','Capital','marginal SCR / RoRAC','sub/sub:900002'],['6','Decision','recommend · refer · decline','governance'],['7','Bind','a human signs','governance']];
+  return `<div style="overflow-x:auto;padding-bottom:4px"><div style="display:flex;gap:6px;min-width:max-content">${st.map((s,i)=>`<a href="#${s[3]}" style="text-decoration:none;width:118px;border:1px solid #e2e8f0;border-top:3px solid ${LC.v};border-radius:9px;padding:8px 9px;background:#fff"><div style="font-size:10px;font-weight:800;color:${LC.v}">${s[0]}. ${s[1]}</div><div class="muted" style="font-size:10.5px;margin-top:2px;line-height:1.4">${s[2]}</div></a>${i<st.length-1?'<span style="align-self:center;color:#cbd5e1">→</span>':''}`).join('')}</div></div>`;}
+
+const GLOSSARY=[
+  ['Cedant','The insurer buying reinsurance — passes (cedes) part of its risk to the reinsurer.'],
+  ['Treaty','Reinsurance over a whole defined portfolio of the cedant, agreed in advance.'],
+  ['Facultative','Reinsurance of a single risk, underwritten individually (secondary here).'],
+  ['Quota Share','Proportional: the reinsurer takes a fixed % of premium and of every loss.'],
+  ['Surplus','Proportional: the reinsurer takes the share above the cedant’s retention line.'],
+  ['XoL (Excess of Loss)','Non-proportional: pays losses inside a layer — limit xs attachment.'],
+  ['Cat XoL','Excess-of-loss cover for catastrophe perils (windstorm, flood, quake).'],
+  ['Attachment / Limit','Where a layer starts paying / how much it pays — e.g. €30m xs €20m.'],
+  ['RoL (Rate on Line)','Layer premium ÷ layer limit — the headline price of an XoL layer.'],
+  ['Bordereau','A periodic schedule of premium or losses supplied by the cedant.'],
+  ['As-if','Loss history restated to today’s terms, rates and exposure for comparability.'],
+  ['PML','Probable Maximum Loss — the modelled loss at a given return period.'],
+  ['AEP / OEP','Aggregate / Occurrence Exceedance Probability curves from a cat model.'],
+  ['Return period (1-in-N)','A loss level exceeded on average once every N years.'],
+  ['1-in-200','The 99.5th-percentile, 1-year loss — the Solvency II capital calibration.'],
+  ['EP curve','Exceedance-probability curve a cat vendor produces for a peril/region.'],
+  ['Accumulation','Concentrated, correlated exposure to one peak peril across the book.'],
+  ['Peak zone','A region/peril tracked against appetite (e.g. European windstorm).'],
+  ['Appetite','The CRO’s maximum tolerated 1-in-200 PML for a peak zone.'],
+  ['SCR / BSCR','Solvency Capital Requirement / Basic SCR (diversified) under Solvency II.'],
+  ['RoRAC','Return on Risk-Adjusted Capital — expected return ÷ marginal SCR.'],
+  ['Diversification benefit','Capital relief from holding uncorrelated risks together.'],
+  ['Combined ratio','Loss ratio + expense ratio; under 100% = underwriting profit.'],
+  ['Ceding commission','Commission the reinsurer pays the cedant on proportional business.'],
+  ['Reinstatement','Restoring a used-up XoL layer for an additional premium.'],
+  ['MRC slip','Market Reform Contract — the broker’s structured submission document.'],
+];
+
+const LEARN_PANELS=[
+  {n:1,icon:'\u{1F501}',title:'The treaty value chain — end to end',subtitle:'Submission to bind. The reinsurer’s whole job is portfolio construction under tail risk.',
+   body:`<p><b>Reinsurance is insurance for insurers.</b> A cedant buys cover to smooth volatility and free up capital; the reinsurer assembles each submission, decides whether it is in appetite, prices it, and — the part that matters most — works out what binding it does to the <b>portfolio</b> and the <b>capital</b> behind it. Then a human decides.</p>
+   <p>Every decision trades off <b>four forces</b>: is the price adequate (<i>combined ratio</i>), what does it do to <i>accumulation</i>, does it earn its <i>capital</i>, and can the <i>counterparty</i> pay. And one rule dominates everything: <b>a deal can look attractive standalone and be toxic in aggregate.</b></p>
+   <p>Two numbers you will see everywhere. The <b>rate-on-line</b> (RoL) — the price of a layer. And the <b>1-in-200 PML</b> — the modelled tail loss that is also the Solvency II capital calibration. <b>Diversification is the only free lunch; correlation destroys it.</b></p>`,
+   diagram:valueChain(),
+   links:[['Open the control tower','portfolio'],['See a submission decided','sub/sub:900002'],['Where the data comes from','intake']]},
+  {n:2,icon:'\u{1F4E8}',title:'Submission — the front door',subtitle:'MRC slip + bordereaux + exposure. Structured beats manual.',
+   body:`<p>A broker sends the <b>MRC slip</b> (cedant, structure, layers, perils, territories, rate-on-line) plus <b>premium and loss bordereaux</b> and <b>exposure</b> data. The quality of what arrives here sets the trajectory of everything downstream.</p>
+   <p>Structured inbound (ACORD GRLC / ADEPT-CDR) is clean and machine-readable; the manual email-and-spreadsheet path is messy, partial, and silently corrupts the analysis. The prize is <i>how much you can decide automatically</i> — and that is a data-completeness problem before it is a modelling one.</p>`,
+   diagram:lrow(lcard('Structured — ADEPT/CDR','ACORD GRLC-shaped feed: complete, typed, straight into triage.',LC.g),lcard('Manual path','Email + spreadsheet: re-keyed, partial, quarantined rows.',LC.a))+lnote('A submission you can read end-to-end is a submission you can triage and price in seconds.'),
+   links:[['See clean vs manual intake','intake'],['See a submission summary','sub/sub:900001']]},
+  {n:3,icon:'\u{1F500}',title:'Triage & appetite — in or out, and against the book',subtitle:'Two questions: do we write this, and does it fit what we already hold?',
+   body:`<p>Sort each submission to <b>fast-track</b>, <b>refer</b> (needs an underwriter / accumulation review), or <b>decline</b>. Two questions decide it: is this the kind of risk we write — territory, peril, structure, counterparty, data quality — and does it fit <i>alongside the in-force book</i>?</p>
+   <p>Where it goes wrong: appetite judged deal-by-deal, blind to the portfolio. A cat layer into a peak zone that is already near appetite looks perfectly fine in isolation — and is exactly the deal that breaches the book.</p>`,
+   diagram:lrow(lcard('Fast-track','Clean, diversifying, away from peak cat — straight through.',LC.g),lcard('Refer','Peak-zone cat, weak counterparty, or near appetite — human review.',LC.a),lcard('Decline','Out of appetite, inadequate data, unpriceable.',LC.r)),
+   links:[['See the triage model','sub/sub:900002']]},
+  {n:4,icon:'⚖️',title:'Technical pricing — is it adequate standalone?',subtitle:'Burning cost & exposure rating. The combined ratio is the verdict.',
+   body:`<p>Price the layer: a model expected (<b>burning-cost</b>) loss ratio from the loss bordereaux, loaded for expenses, brokerage and capital, gives a <b>technical rate-on-line</b> to compare with the offered one. The <b>combined ratio</b> (loss + expense) is the standalone verdict — under 100% means an underwriting profit.</p>
+   <p>The trap: a good price on one layer can still be the <i>wrong deal for the portfolio</i>. Pricing tools rarely see accumulation or capital — so an adequately-priced cat layer can quietly be value-destructive. The next two slides are where that catch is made.</p>`,
+   diagram:`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="background:${LC.b}15;color:${LC.b};border:1px solid ${LC.b}55;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">Combined ratio</span><span style="color:#94a3b8">=</span><span style="background:${LC.a}15;color:${LC.a};border:1px solid ${LC.a}55;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">Loss ratio</span><span style="color:#94a3b8">+</span><span style="background:${LC.s}15;color:${LC.s};border:1px solid ${LC.s}55;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">Expense ratio</span></div>`+lnote('Adequate price is necessary, not sufficient. Bricksurance’s portfolio bomb prices well — and still fails.'),
+   links:[['See the technical price','sub/sub:900002']]},
+  {n:5,icon:'\u{1F32A}️',title:'Accumulation — the crux, part 1',subtitle:'Peak zones, correlation, and PML versus appetite.',
+   body:`<p>The reinsurer’s central risk is <b>accumulation</b> — too much correlated exposure to one peak peril (European windstorm, CEE flood, US hurricane). The book carries a <b>1-in-200 PML per peak zone</b> against a CRO <b>appetite</b>. Binding a new cat layer adds <i>marginal PML</i>; if the zone is already near appetite, one more deal <b>breaches</b> it.</p>
+   <p><b>Correlation is the killer.</b> A layer correlated with treaties already on the book earns no diversification benefit — its full tail stacks on top. This is the Hitchcock moment: quantify the marginal PML, whether it breaches appetite and by how much, with the correlated in-force treaties named.</p>`,
+   diagram:lflow(['Current zone PML','+ marginal from this deal','= PML after','vs appetite'],LC.r)+lnote('Bricksurance’s European-windstorm zone sits at ~98% of appetite — so the bomb is the straw that breaches it.'),
+   links:[['See the accumulation crux','sub/sub:900002'],['See the control tower','portfolio']]},
+  {n:6,icon:'\u{1F3DB}️',title:'Capital — the crux, part 2',subtitle:'Marginal SCR, RoRAC versus the hurdle, and the Solvency II 1-in-200.',
+   body:`<p>Every deal consumes capital. The <b>marginal SCR</b> is the extra capital you must hold for the tail this deal adds — punitive when it piles into a saturated, correlated zone (no diversification credit). Set the deal’s expected return against that capital: <b>RoRAC</b>. Below the hurdle (here 15%), the deal is <b>capital-destructive</b> — it erodes economic capital even when it shows an underwriting profit.</p>
+   <p>The <b>1-in-200</b> (99.5th percentile, 1-year) PML is the <b>Solvency II</b> calibration — appetite, accumulation and the marginal SCR all hang off the same number. Capital is where an attractive price goes to die.</p>`,
+   diagram:lrow(lcard('Expected return','Ceded premium − expected loss − expenses.',LC.g),lcard('Marginal SCR','Capital held for the tail this deal adds — loaded for correlation.',LC.r),lcard('RoRAC vs hurdle','Return ÷ capital. Below 15% = capital-destructive.',LC.v))+lnote('Two independent red flags — accumulation AND capital — make the refer earned, not arbitrary.'),
+   links:[['See the capital crux','sub/sub:900002'],['See the capital position','portfolio']]},
+  {n:7,icon:'\u{1F6F0}️',title:'The cat-model boundary — vendors disagree',subtitle:'Blend, don’t compute. Own the boundary; never rebuild it.',
+   body:`<p>Catastrophe loss is modelled by <b>external vendors</b>. On the same peril at the same return period they routinely disagree by <b>15–25%</b> — different hazard, vulnerability and financial assumptions. The discipline: ingest several and <b>blend</b>; never bet the book on one model.</p>
+   <p>Bricksurance Re <b>never rebuilds a cat engine</b> — it owns the boundary around it. Databricks blends vendor EP curves into one view with the <i>divergence band visible</i>, then enriches with accumulation and capital. Same principle for placement: ingest from the broker network, never become it.</p>`,
+   diagram:lflow(['Vendor A','Vendor B','Vendor C'],LC.b)+`<div style="margin-top:8px">${lflow(['Blended PML + divergence band'],LC.v)}</div>`+lnote('If three vendors disagree by a quarter, a single-model PML is false precision. The blend is the honest number.'),
+   links:[['See the blended curves & divergence','portfolio']]},
+  {n:8,icon:'\u{1F4B3}',title:'Counterparty & credit',subtitle:'The cedant can default. Credit quality steps feed appetite and capital.',
+   body:`<p>A reinsurance contract is a promise both ways — the cedant owes reinstatement and adjustment premium, and its own solvency matters. <b>Counterparty credit quality</b> (rating, Solvency II credit-quality step, probability of default) feeds both appetite and the counterparty-default module of capital.</p>
+   <p>For most treaty business it is a lighter lever than accumulation — but a weak counterparty can turn an otherwise-fine deal into a refer, and concentration of credit across many treaties with one cedant is its own accumulation.</p>`,
+   diagram:lrow(lcard('Strong (AA / step 1)','Negligible default load — no friction.',LC.g),lcard('Mid (A / step 2)','Standard treatment.',LC.b),lcard('Weak (BBB / step 3+)','Capital load; may tip to refer.',LC.a)),
+   links:[['See counterparty checks','governance']]},
+  {n:9,icon:'\u{1F4D0}',title:'Proportional vs non-proportional',subtitle:'Share the book, or pay the tail.',
+   body:`<p>Two families. <b>Proportional</b> (Quota Share, Surplus) — the reinsurer takes a share of premium <i>and</i> losses; simple, diversifying, capital-light, thin-margin. <b>Non-proportional</b> (Excess of Loss, Cat XoL) — the reinsurer pays losses inside a layer (<b>limit xs attachment</b>, e.g. €30m xs €20m) for a rate-on-line; this is where cat accumulation and tail capital live.</p>
+   <p>The two hero submissions are one of each: a clean European motor <b>quota share</b> (proportional, diversifying, capital-accretive) and a European windstorm <b>cat XoL</b> (non-proportional — the portfolio bomb).</p>`,
+   diagram:lrow(lcard('Proportional — QS / Surplus','Share premium & losses. Diversifying, capital-light, thin margin.',LC.g),lcard('Non-proportional — XoL / Cat XoL','Pay a layer for a rate-on-line. Where the tail capital lives.',LC.r)),
+   links:[['See a quota share','sub/sub:900001'],['See a cat XoL','sub/sub:900002']]},
+  {n:10,icon:'\u{1F91D}',title:'Decision & bind — escalate, never bind',subtitle:'Humans decide; the AI advises, challenges, and keeps the trail.',
+   body:`<p>The underwriter, within CRO appetite, makes the call: <b>recommend-to-bind</b>, <b>refer</b>, or <b>decline</b>. The AI assembles the submission, prices it, quantifies accumulation and capital, and argues the other side — but it <b>never binds</b>. That safety asymmetry (it can add caution, never authority) is what makes automation defensible.</p>
+   <p>Every decision is recorded: what was recommended, the triage and pricing verdicts, whether appetite was breached or the deal was capital-destructive, who decided, and whether it was bound. When a regulator asks <i>“why did you write that?”</i>, the audit trail answers.</p>`,
+   diagram:lflow(['Recommend-to-bind','Refer','Decline'],LC.b)+lnote('Escalate-not-bind: the supervisor synthesises and challenges; a human signs.'),
+   links:[['See the decision audit','governance'],['See the supervisor synthesis','sub/sub:900002']]},
+  {n:11,icon:'\u{1F4C8}',title:'The financial roll-up',subtitle:'Ceded premium → combined ratio → capital → return on equity.',
+   body:`<p>The unifying thread: <b>ceded premium</b> − expected loss − expenses = underwriting result → <b>loss & combined ratio</b> → <b>capital consumed (SCR)</b> → <b>return on capital</b> → the reinsurer’s ROE and its own solvency ratio.</p>
+   <p>Accumulation and capital sit at the centre — a book of individually-profitable deals can still destroy value if it consumes too much correlated tail capital. The whole point of the crux is to make that visible <i>deal by deal</i>, before you bind.</p>`,
+   diagram:lflow(['Ceded premium','Combined ratio','Marginal SCR','RoRAC','ROE / solvency ratio'],LC.b),
+   links:[['See the capital position','portfolio']]},
+  {n:12,icon:'\u{1F4CA}',title:'MI & the CRO control tower',subtitle:'Capacity versus appetite. Efficiency and effectiveness.',
+   body:`<p>The CRO runs the book on two families. <b>Efficiency</b> — submissions handled, cycle time, % auto-triaged. <b>Effectiveness</b> — capacity vs appetite by peak zone (with RAG status), capital efficiency, rate adequacy, diversification. A handful of board KPIs sit over layers of support metrics.</p>
+   <p>The prize is <b>leading, not lagging</b> — see the zone about to breach <i>before</i> you bind the deal that breaches it. Genie makes the whole portfolio self-serve in plain English.</p>`,
+   diagram:lrow(lcard('Efficiency','Submissions handled · cycle time · % auto-triaged.',LC.b),lcard('Effectiveness','Capacity vs appetite · capital efficiency · rate adequacy · diversification.',LC.g)),
+   links:[['Open the control tower','portfolio'],['Ask the portfolio (Genie)','ai']]},
+  {n:13,icon:'\u{1F6E1}️',title:'Governance & regulation',subtitle:'Solvency II, sanctions/ESG, and explainable decisions.',
+   body:`<p>Reinsurance is <b>capital-regulated</b> (Solvency II and equivalents): the 1-in-200 SCR, eligible own funds, the solvency ratio. On top sit <b>sanctions screening</b>, <b>ESG</b>, and AI-specific duties — explainability, the right to human review, and a full audit trail.</p>
+   <p>The reframe: governance is not a checkbox, it is <b>what makes automated triage and pricing deployable</b>. Every decision is explainable (structured reasons, not prose), every source has lineage, and sensitive data is tiered.</p>`,
+   diagram:lgrid([['"Show your reasoning"','structured decision audit'],['Explainable scoring','triage + pricing reasons, model-backed'],['Right to human review','escalate-not-bind'],['Sanctions & ESG','counterparty screening'],['Capital cross-link','Solvency II 1-in-200 SCR'],['Prove the data','UC lineage + sensitivity tiers']]),
+   links:[['See governance','governance']]},
+  {n:14,icon:'\u{1F3AF}',title:'The pitch — own the boundaries',subtitle:'Never rebuild cat or placement. Quantify the marginal call at the desk.',
+   body:`<p>The highest-leverage thing in treaty reinsurance is the <b>marginal portfolio decision</b> — what one more treaty does to peak-zone accumulation and the capital behind it. And that is a <b>Databricks</b> problem: integrate submissions + bordereaux + exposure + multi-vendor cat + the in-force book, and quantify the marginal PML and SCR <i>at the desk, in seconds</i>.</p>
+   <p><b>Own the boundaries</b> — ingest from the cat models and the placement network, never rebuild them; enrich around them. Two layers: a deterministic <b>engine</b> (triage, price, accumulation, capital) and an AI <b>supervisor</b> that narrates and challenges but never binds. One platform instead of a placement tool, an exposure tool, a bordereaux process, a BI stack and a spreadsheet.</p>`,
+   diagram:lrow(lcard('Layer 1 — the engine (deterministic)','UC functions: triage, price, accumulation, capital. Decides the numbers.',LC.v),lcard('Layer 2 — the supervisor (agent)','Pulls the threads together, reasons in human terms, challenges the call.',LC.b))+lnote('Safety asymmetry: the agent escalates but never binds — that is what makes the automation defensible.'),
+   links:[['See the decision view','sub/sub:900002'],['See the AI layer','ai']]},
+  {n:15,icon:'\u{1F4D6}',title:'Glossary',subtitle:'The vocabulary you will hear in any reinsurance room.',
+   body:`<p class="muted">Plain-English definitions for the terms used across this course and the workbench.</p>`,
+   diagram:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px">${GLOSSARY.map(g=>`<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid #f1f5f9"><span style="flex:0 0 150px;font-weight:700;color:#0f172a;font-size:12px">${g[0]}</span><span class="muted" style="font-size:12px;line-height:1.4">${g[1]}</span></div>`).join('')}</div>`,
+   links:[]},
+];
+
+function learn(arg){const m=$("#main");const n=LEARN_PANELS.length;
+  let i=parseInt(arg,10); if(isNaN(i))i=0; i=Math.max(0,Math.min(n-1,i));
+  const p=LEARN_PANELS[i];
+  const toc=`<aside style="position:sticky;top:8px;align-self:start"><div class="card" style="padding:12px">
+    <div class="eyebrow">Reinsurance 101</div><div style="font-weight:700;font-size:12.5px;margin:2px 0 10px;color:var(--mut)">${n} slides</div>
+    <ol style="list-style:none;margin:0;padding:0">${LEARN_PANELS.map((q,j)=>`<li><a style="display:flex;gap:7px;padding:5px 7px;border-radius:8px;text-decoration:none;font-size:12.5px;${j===i?'background:#f5f3ff;color:var(--violet);font-weight:700':'color:#475569'}" href="#learn/${j}"><span>${q.icon}</span><span>${q.n}. ${q.title.split('—')[0].trim()}</span></a></li>`).join('')}</ol></div></aside>`;
+  const links=(p.links&&p.links.length)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">${p.links.map(l=>`<a class="btn ghost" style="text-decoration:none" href="#${l[1]}">↗ ${l[0]}</a>`).join('')}</div>`:'';
+  const nav=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;border-top:1px solid var(--line);padding-top:14px">
+     <a class="btn ghost" style="text-decoration:none;${i===0?'opacity:.4;pointer-events:none':''}" href="#learn/${i-1}">← Prev</a>
+     <span class="muted">Slide ${i+1} of ${n}</span>
+     <a class="btn" style="text-decoration:none;${i===n-1?'opacity:.4;pointer-events:none':''}" href="#learn/${i+1}">Next →</a></div>`;
+  const slide=`<div class="card" style="min-height:470px;display:flex;flex-direction:column">
+    <div style="display:flex;gap:12px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px">
+      <div style="width:42px;height:42px;border-radius:11px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0">${p.icon}</div>
+      <div><div class="eyebrow">Slide ${p.n} of ${n}</div><h1 style="font-size:23px;margin:2px 0 0">${p.title}</h1><p class="muted" style="font-style:italic;margin:4px 0 0">${p.subtitle}</p></div></div>
+    <div style="font-size:14px;color:#334155;line-height:1.62">${p.body}</div>
+    ${p.diagram?`<div class="card" style="margin-top:16px;background:linear-gradient(135deg,#faf5ff,#fff)">${p.diagram}</div>`:''}
+    ${links}<div style="flex:1"></div>${nav}</div>`;
+  m.innerHTML=`<div class="eyebrow">Learn</div><h1>Reinsurance 101</h1><p class="sub">How treaty reinsurance actually works, end to end — as a slide deck. Jump with the list, or step through with Next. Each slide links into the running workbench.</p>
+    <div style="display:grid;grid-template-columns:240px 1fr;gap:22px;align-items:start">${toc}<div>${slide}</div></div>`;
+  window.scrollTo(0,0);}
 
 $("#resetBtn").onclick=async()=>{if(!confirm("Reset the demo (re-anchor dates, re-warm heroes)?"))return;
   $("#resetBtn").textContent="Resetting…";try{const r=await api("/reset",{method:"POST"});
