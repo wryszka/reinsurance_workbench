@@ -32,6 +32,10 @@ FEATURES = ["subject_premium_eur", "ceded_share_pct", "rol_pct", "as_if_loss_rat
             "total_tiv_eur", "data_quality_score", "rate_adequacy", "is_cat_xol", "credit_quality_step",
             "counterparty_pd_pct", "is_peak_zone", "zone_utilisation_pct", "expected_loss_ratio"]
 struct_cols = ", ".join([f"'{c}', {c}" for c in FEATURES])
+# Aggregate the feature row to exactly one row (deterministic) BEFORE calling ai_query — a SQL scalar UDF body
+# that scans a table by key is treated as a correlated scalar subquery and must be provably single-row, and
+# ai_query (non-deterministic) cannot itself be wrapped in an aggregate.
+agg_cols = ", ".join([f"any_value({c}) AS {c}" for c in FEATURES])
 
 # COMMAND ----------
 
@@ -58,7 +62,7 @@ RETURN
   FROM (
     SELECT ai_query('{TRIAGE_EP}', named_struct({struct_cols}), 'ARRAY<DOUBLE>') AS p,
            data_quality_score, is_peak_zone, is_cat_xol, zone_utilisation_pct, credit_quality_step, rate_adequacy
-    FROM {fqn}.feature_submission WHERE submission_public_id = p_submission_public_id
+    FROM (SELECT {agg_cols} FROM {fqn}.feature_submission WHERE submission_public_id = p_submission_public_id)
   )
 """)
 print("fn_triage_submission created")
@@ -71,26 +75,24 @@ print("fn_triage_submission created")
 
 spark.sql(f"""
 CREATE OR REPLACE FUNCTION {fqn}.fn_price_submission(p_submission_public_id STRING)
-RETURNS STRUCT<predicted_loss_ratio DOUBLE, technical_rol_pct DOUBLE, offered_rol_pct DOUBLE, rate_adequacy DOUBLE, verdict STRING>
-COMMENT 'Technically price a reinsurance submission: returns the model expected (burning-cost) loss ratio, the indicated technical rate-on-line, the offered rate-on-line, the rate adequacy ratio, and a verdict (adequate / thin / inadequate). Use when asked whether a submission is adequately rated or what the technical price is.'
+RETURNS STRUCT<predicted_loss_ratio DOUBLE, combined_ratio_pct DOUBLE, offered_rol_pct DOUBLE, rate_adequacy DOUBLE, verdict STRING>
+COMMENT 'Technically price a reinsurance submission: returns the model expected (burning-cost) loss ratio, the projected combined ratio (loss + expense), the offered rate-on-line, a rate-adequacy ratio (target combined / projected combined; >=1 is adequate), and a verdict (adequate / thin / inadequate). Use when asked whether a submission is adequately rated standalone.'
 RETURN
   SELECT named_struct(
     'predicted_loss_ratio', round(plr, 4),
-    'technical_rol_pct', round(tech_rol * 100, 2),
+    'combined_ratio_pct', round(combined * 100, 1),
     'offered_rol_pct', round(offered_rol * 100, 2),
-    'rate_adequacy', round(adequacy, 3),
-    'verdict', CASE WHEN adequacy >= 1.05 THEN 'adequate' WHEN adequacy >= 0.95 THEN 'thin' ELSE 'inadequate' END
+    'rate_adequacy', round(0.95 / nullif(combined, 0), 3),
+    'verdict', CASE WHEN 0.95 / nullif(combined, 0) >= 1.0 THEN 'adequate'
+                    WHEN 0.95 / nullif(combined, 0) >= 0.92 THEN 'thin' ELSE 'inadequate' END
   )
   FROM (
     SELECT plr, offered_rol,
-           CASE WHEN is_cat_xol = 1 THEN plr * 0.45 + 0.07 ELSE plr END AS tech_rol,
-           CASE WHEN is_cat_xol = 1
-                THEN offered_rol / nullif(plr * 0.45 + 0.07, 0)
-                ELSE (1.0 - plr) / 0.28 END AS adequacy
+           plr + CASE WHEN is_cat_xol = 1 THEN 0.15 ELSE 0.28 END AS combined
     FROM (
       SELECT ai_query('{PRICING_EP}', named_struct({struct_cols}), 'DOUBLE') AS plr,
              rol_pct AS offered_rol, is_cat_xol
-      FROM {fqn}.feature_submission WHERE submission_public_id = p_submission_public_id
+      FROM (SELECT {agg_cols} FROM {fqn}.feature_submission WHERE submission_public_id = p_submission_public_id)
     )
   )
 """)
@@ -110,11 +112,12 @@ RETURNS STRUCT<submission_public_id STRING, cedant STRING, broker STRING, struct
 COMMENT 'Return a compact, factual summary of a reinsurance submission (cedant, broker, structure, line of business, territories, perils, peak zone, layer, subject premium, rate-on-line, cedant rating, data quality, inbound channel). Use to brief a user on a specific submission before deeper analysis.'
 RETURN
   SELECT named_struct(
-    'submission_public_id', submission_public_id, 'cedant', cedant_name, 'broker', broker,
-    'structure', structure, 'lob', lob, 'territories', territories, 'perils', perils, 'zone', zone_name,
-    'layer', CASE WHEN is_cat_xol = 1 THEN concat(format_number(layer_limit_eur/1e6,0), 'm xs ', format_number(layer_attachment_eur/1e6,0), 'm') ELSE 'proportional' END,
-    'subject_premium_eur', CAST(subject_premium_eur AS DOUBLE), 'rol_pct', round(rol_pct*100,2),
-    'rating', rating, 'data_quality_score', data_quality_score, 'inbound_channel', inbound_channel)
+    'submission_public_id', any_value(submission_public_id), 'cedant', any_value(cedant_name), 'broker', any_value(broker),
+    'structure', any_value(structure), 'lob', any_value(lob), 'territories', any_value(territories),
+    'perils', any_value(perils), 'zone', any_value(zone_name),
+    'layer', any_value(CASE WHEN is_cat_xol = 1 THEN concat(format_number(layer_limit_eur/1e6,0), 'm xs ', format_number(layer_attachment_eur/1e6,0), 'm') ELSE 'proportional' END),
+    'subject_premium_eur', any_value(CAST(subject_premium_eur AS DOUBLE)), 'rol_pct', any_value(round(rol_pct*100,2)),
+    'rating', any_value(rating), 'data_quality_score', any_value(data_quality_score), 'inbound_channel', any_value(inbound_channel))
   FROM {fqn}.silver_submissions WHERE submission_public_id = p_submission_public_id
 """)
 
@@ -124,12 +127,11 @@ RETURNS STRUCT<zone_id STRING, zone_name STRING, current_pml_1in200_eur DOUBLE, 
                utilisation_pct DOUBLE, headroom_eur DOUBLE, rag STRING, n_treaties INT>
 COMMENT 'Return the current portfolio accumulation position for a peak zone (or pass NULL / "ALL" for the worst-utilised zone): current 1-in-200 PML, appetite, utilisation %, headroom, RAG status and treaty count. Use for CRO control-tower and "Ask the Portfolio" questions about capacity vs appetite.'
 RETURN
-  SELECT named_struct('zone_id', zone_id, 'zone_name', zone_name,
-    'current_pml_1in200_eur', CAST(current_pml_1in200_eur AS DOUBLE), 'appetite_eur', CAST(appetite_pml_1in200_eur AS DOUBLE),
-    'utilisation_pct', utilisation_pct, 'headroom_eur', CAST(headroom_eur AS DOUBLE), 'rag', rag, 'n_treaties', n_treaties)
+  SELECT named_struct('zone_id', any_value(zone_id), 'zone_name', any_value(zone_name),
+    'current_pml_1in200_eur', any_value(CAST(current_pml_1in200_eur AS DOUBLE)), 'appetite_eur', any_value(CAST(appetite_pml_1in200_eur AS DOUBLE)),
+    'utilisation_pct', any_value(utilisation_pct), 'headroom_eur', any_value(CAST(headroom_eur AS DOUBLE)), 'rag', any_value(rag), 'n_treaties', any_value(n_treaties))
   FROM {fqn}.gold_portfolio_position
   WHERE (p_zone_id IS NOT NULL AND p_zone_id <> 'ALL' AND zone_id = p_zone_id)
      OR ((p_zone_id IS NULL OR p_zone_id = 'ALL') AND utilisation_pct = (SELECT max(utilisation_pct) FROM {fqn}.gold_portfolio_position))
-  LIMIT 1
 """)
 print("fn_submission_summary + fn_portfolio_position created")

@@ -138,7 +138,7 @@ async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading"
       <div class="card"><h3>Appetite / Triage</h3><div class="big">${(t.decision||'—').replace('_',' ')} <span class="muted" style="font-size:14px">${t.confidence?t.confidence+'%':''}</span></div><ul class="reasons">${rl(t.top_reasons)}</ul></div>
       <div class="card"><h3>Technical price</h3><div class="big">${p.verdict||'—'}</div>
         <div class="kv"><span>Predicted loss ratio</span><b>${p.predicted_loss_ratio!=null?pct(p.predicted_loss_ratio*100):'—'}</b></div>
-        <div class="kv"><span>Technical RoL</span><b>${p.technical_rol_pct!=null?pct(p.technical_rol_pct):'—'}</b></div>
+        <div class="kv"><span>Combined ratio</span><b>${p.combined_ratio_pct!=null?pct(p.combined_ratio_pct):'—'}</b></div>
         <div class="kv"><span>Offered RoL</span><b>${p.offered_rol_pct!=null?pct(p.offered_rol_pct):'—'}</b></div>
         <div class="kv"><span>Rate adequacy</span><b>${p.rate_adequacy??'—'}</b></div></div>
       <div class="card" style="${accRed?'border-color:#fecaca;background:#fff5f5':''}"><h3>Marginal accumulation ${accRed?'<span class="pill red">BREACH</span>':'<span class="pill green">OK</span>'}</h3>
