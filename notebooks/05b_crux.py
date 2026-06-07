@@ -66,21 +66,16 @@ RETURN
     ))
   )
   FROM (
-    SELECT sub.zone_id, sub.zone_name, sub.structure, sub.is_peak, sub.is_cat_xol, sub.layer_limit_eur,
-           CAST(coalesce(acc.current_pml_1in200_eur, 0) AS DOUBLE) AS cur,
-           CAST(coalesce(acc.appetite_pml_1in200_eur, sub.appetite_pml_1in200_eur, 0) AS DOUBLE) AS app,
-           CAST(CASE WHEN sub.is_peak AND sub.is_cat_xol = 1
-                     THEN sub.layer_limit_eur * {XOL_OCCUPANCY} * (1 + {XOL_CORR_UPLIFT})
-                     ELSE 0 END AS DOUBLE) AS marg,
-           coalesce(cor.ncorr, 0) AS ncorr,
-           coalesce(cor.corr_ids, array()) AS corr_ids
-    FROM {fqn}.silver_submissions sub
-    LEFT JOIN {fqn}.inforce_accumulation acc ON sub.zone_id = acc.zone_id
-    LEFT JOIN (SELECT zone_id, CAST(count(*) AS INT) AS ncorr, collect_list(treaty_id) AS corr_ids
-               FROM {fqn}.silver_inforce_treaties
-               WHERE structure = 'Cat XoL' AND is_correlated_ref = true GROUP BY zone_id) cor
-           ON sub.zone_id = cor.zone_id
-    WHERE sub.submission_public_id = p_submission_public_id
+    SELECT any_value(zone_id) AS zone_id, any_value(zone_name) AS zone_name, any_value(structure) AS structure,
+           any_value(CAST(coalesce(zone_current_pml_1in200_eur, 0) AS DOUBLE)) AS cur,
+           any_value(CAST(coalesce(appetite_pml_1in200_eur, 0) AS DOUBLE)) AS app,
+           any_value(CAST(CASE WHEN is_peak AND is_cat_xol = 1
+                     THEN layer_limit_eur * {XOL_OCCUPANCY} * (1 + {XOL_CORR_UPLIFT})
+                     ELSE 0 END AS DOUBLE)) AS marg,
+           any_value(coalesce(n_correlated, 0)) AS ncorr,
+           any_value(coalesce(correlated_treaty_ids, array())) AS corr_ids
+    FROM {fqn}.silver_submissions
+    WHERE submission_public_id = p_submission_public_id
   ) s
 """)
 print("fn_accumulation_impact created")
@@ -115,36 +110,31 @@ RETURN
     ))
   )
   FROM (
-    SELECT structure, ceded_prem, exp_loss, expense, ncorr, marg,
-           (ceded_prem - exp_loss - expense) AS exp_return,
-           marg_scr,
-           CASE WHEN marg_scr > 0 THEN (ceded_prem - exp_loss - expense) / marg_scr ELSE 999 END AS rorac
-    FROM (
-      SELECT sub.structure, sub.is_cat_xol,
-             CASE WHEN sub.is_cat_xol = 1 THEN sub.rol_pct * sub.layer_limit_eur
-                  ELSE sub.ceded_share_pct * sub.subject_premium_eur END AS ceded_prem_base,
-             sub.expected_loss_ratio AS elr,
-             coalesce(cor.ncorr, 0) AS ncorr,
-             CAST(CASE WHEN sub.is_peak AND sub.is_cat_xol = 1
-                       THEN sub.layer_limit_eur * {XOL_OCCUPANCY} * (1 + {XOL_CORR_UPLIFT})
-                       ELSE 0 END AS DOUBLE) AS marg,
-             sub.is_cat_xol AS icx
-      FROM {fqn}.silver_submissions sub
-      LEFT JOIN (SELECT zone_id, CAST(count(*) AS INT) AS ncorr FROM {fqn}.silver_inforce_treaties
-                 WHERE structure = 'Cat XoL' AND is_correlated_ref = true GROUP BY zone_id) cor
-             ON sub.zone_id = cor.zone_id
-      WHERE sub.submission_public_id = p_submission_public_id
-    ) b
-    -- expand the economics with the named bases
-    CROSS JOIN LATERAL (
-      SELECT b.ceded_prem_base AS ceded_prem,
-             b.elr * b.ceded_prem_base AS exp_loss,
-             CASE WHEN b.icx = 1 THEN ({BROKERAGE} + {XOL_INTERNAL}) * b.ceded_prem_base
-                  ELSE ({CEDING_COMMISSION} + {PROP_INTERNAL}) * b.ceded_prem_base END AS expense,
-             CASE WHEN b.icx = 1
-                  THEN b.marg * {SCR_FACTOR} * (1 + {CORR_LOADING} * b.ncorr)
-                  ELSE b.ceded_prem_base * {PROP_SCR_FACTOR} * {PROP_DIV_CREDIT} END AS marg_scr
-    ) e
+    WITH base AS (
+      SELECT any_value(structure) AS structure, any_value(is_cat_xol) AS icx, any_value(is_peak) AS is_peak,
+             any_value(layer_limit_eur) AS layer_limit_eur, any_value(rol_pct) AS rol_pct,
+             any_value(ceded_share_pct) AS ceded_share_pct, any_value(subject_premium_eur) AS subject_premium_eur,
+             any_value(expected_loss_ratio) AS elr, any_value(coalesce(n_correlated, 0)) AS ncorr
+      FROM {fqn}.silver_submissions
+      WHERE submission_public_id = p_submission_public_id
+    ),
+    econ AS (
+      SELECT structure, ncorr, icx,
+             CASE WHEN icx = 1 THEN rol_pct * layer_limit_eur ELSE ceded_share_pct * subject_premium_eur END AS ceded_prem,
+             CAST(CASE WHEN is_peak AND icx = 1 THEN layer_limit_eur * {XOL_OCCUPANCY} * (1 + {XOL_CORR_UPLIFT}) ELSE 0 END AS DOUBLE) AS marg,
+             elr
+      FROM base
+    )
+    SELECT structure, ncorr, ceded_prem,
+           elr * ceded_prem AS exp_loss,
+           CASE WHEN icx = 1 THEN ({BROKERAGE} + {XOL_INTERNAL}) * ceded_prem ELSE ({CEDING_COMMISSION} + {PROP_INTERNAL}) * ceded_prem END AS expense,
+           (ceded_prem - elr * ceded_prem - (CASE WHEN icx = 1 THEN ({BROKERAGE} + {XOL_INTERNAL}) * ceded_prem ELSE ({CEDING_COMMISSION} + {PROP_INTERNAL}) * ceded_prem END)) AS exp_return,
+           CASE WHEN icx = 1 THEN marg * {SCR_FACTOR} * (1 + {CORR_LOADING} * ncorr) ELSE ceded_prem * {PROP_SCR_FACTOR} * {PROP_DIV_CREDIT} END AS marg_scr,
+           CASE WHEN (CASE WHEN icx = 1 THEN marg * {SCR_FACTOR} * (1 + {CORR_LOADING} * ncorr) ELSE ceded_prem * {PROP_SCR_FACTOR} * {PROP_DIV_CREDIT} END) > 0
+                THEN (ceded_prem - elr * ceded_prem - (CASE WHEN icx = 1 THEN ({BROKERAGE} + {XOL_INTERNAL}) * ceded_prem ELSE ({CEDING_COMMISSION} + {PROP_INTERNAL}) * ceded_prem END))
+                     / (CASE WHEN icx = 1 THEN marg * {SCR_FACTOR} * (1 + {CORR_LOADING} * ncorr) ELSE ceded_prem * {PROP_SCR_FACTOR} * {PROP_DIV_CREDIT} END)
+                ELSE 999 END AS rorac
+    FROM econ
   ) f
 """)
 print("fn_capital_impact created")

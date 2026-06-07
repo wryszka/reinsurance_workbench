@@ -84,6 +84,15 @@ def silver_submissions():
         "submission_public_id", "as_if_loss_ratio", "large_loss_count", "total_claims", "loss_years")
     expo = dlt.read("silver_exposure_summary").select(
         "submission_public_id", "total_tiv_eur", "total_locations")
+    # Denormalise the as-at zone accumulation + correlated-treaty info onto the submission, so the crux UC
+    # functions are a single-table, single-row lookup (a SQL scalar UDF body cannot contain a decorrelatable
+    # JOIN+GROUP BY). zone_current_pml + n_correlated + correlated_treaty_ids live here.
+    acc = spark.read.table(f"{REF}.inforce_accumulation").select(
+        "zone_id", F.col("current_pml_1in200_eur").alias("zone_current_pml_1in200_eur"))
+    corr = (spark.read.table(f"{REF}.inforce_treaties")
+            .filter("structure = 'Cat XoL' AND is_correlated_ref = true")
+            .groupBy("zone_id").agg(F.count("*").cast("int").alias("n_correlated"),
+                                    F.sort_array(F.collect_list("treaty_id")).alias("correlated_treaty_ids")))
 
     return (subs
             .join(cedants, "cedant_id", "left")
@@ -91,6 +100,10 @@ def silver_submissions():
             .join(zones, "zone_id", "left")
             .join(loss, "submission_public_id", "left")
             .join(expo, "submission_public_id", "left")
+            .join(acc, "zone_id", "left")
+            .join(corr, "zone_id", "left")
+            .withColumn("n_correlated", F.coalesce(F.col("n_correlated"), F.lit(0)))
+            .withColumn("correlated_treaty_ids", F.coalesce(F.col("correlated_treaty_ids"), F.array()))
             # data-quality score: slip completeness adjusted for manual-path penalty
             .withColumn("data_quality_score",
                         F.round(F.col("slip_completeness") *
