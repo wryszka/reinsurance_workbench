@@ -209,7 +209,7 @@ subs = []
 subs.append(make_submission(
     "sub:900001", "CED01", "Guy Carpenter", "Quota Share", "Proportional", "Motor",
     "DE, AT, NL", "Motor TPL, Motor OD", "EU_MOTOR",
-    0, 0, subject_prem=240_000_000, ceded_share=0.30, rol=0.0, elr=0.72,
+    0, 0, subject_prem=240_000_000, ceded_share=0.30, rol=0.0, elr=0.66,
     channel="ADEPT_CDR", completeness=1.0))
 
 # ============================ SACRED HERO 2: sub:900002 — the portfolio bomb ============================

@@ -1,0 +1,42 @@
+resources:
+  jobs:
+    reinsurance_05_ml:
+      name: reinsurance_05_ml
+      tags:
+        project: reinsurance_workbench
+      tasks:
+        - task_key: features
+          notebook_task:
+            notebook_path: ../notebooks/04_features.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+        - task_key: models
+          depends_on:
+            - task_key: features
+          notebook_task:
+            notebook_path: ../notebooks/05_models.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+        - task_key: crux
+          depends_on:
+            - task_key: features
+          notebook_task:
+            notebook_path: ../notebooks/05b_crux.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+      environments:
+        - environment_key: ml
+          spec:
+            client: "5"
+            dependencies:
+              - databricks-feature-engineering
+              - mlflow
+              - lightgbm
+              - scikit-learn
+              - databricks-sdk

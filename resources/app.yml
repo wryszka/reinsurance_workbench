@@ -1,0 +1,31 @@
+resources:
+  apps:
+    reinsurance_workbench_app:
+      name: reinsurance-workbench
+      description: "Bricksurance Re — Reinsurance Intelligence Workbench (thin presentation layer over real Databricks objects)."
+      source_code_path: ../app
+      resources:
+        - name: sql_warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: triage_endpoint
+          serving_endpoint:
+            name: reinsurance-triage
+            permission: CAN_QUERY
+        - name: pricing_endpoint
+          serving_endpoint:
+            name: reinsurance-pricing
+            permission: CAN_QUERY
+        - name: supervisor_endpoint
+          serving_endpoint:
+            name: reinsurance-supervisor
+            permission: CAN_QUERY
+        - name: challenge_endpoint
+          serving_endpoint:
+            name: reinsurance-challenge
+            permission: CAN_QUERY
+        - name: dataquality_endpoint
+          serving_endpoint:
+            name: reinsurance-dataquality
+            permission: CAN_QUERY

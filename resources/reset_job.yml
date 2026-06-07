@@ -1,0 +1,60 @@
+resources:
+  jobs:
+    reinsurance_99_reset:
+      name: reinsurance_99_reset
+      tags:
+        project: reinsurance_workbench
+      parameters:
+        - name: seed
+          default: "42"
+      tasks:
+        - task_key: data_gen
+          notebook_task:
+            notebook_path: ../notebooks/00_setup_and_data_generation.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              seed: "{{job.parameters.seed}}"
+          environment_key: reset
+        - task_key: medallion
+          depends_on:
+            - task_key: data_gen
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.reinsurance_medallion.id}
+            full_refresh: true
+        - task_key: features
+          depends_on:
+            - task_key: medallion
+          notebook_task:
+            notebook_path: ../notebooks/04_features.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: reset
+        - task_key: governance
+          depends_on:
+            - task_key: features
+          notebook_task:
+            notebook_path: ../notebooks/07_governance.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: reset
+        - task_key: cache_reset
+          depends_on:
+            - task_key: features
+          notebook_task:
+            notebook_path: ../notebooks/09_reset.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: reset
+      environments:
+        - environment_key: reset
+          spec:
+            client: "5"
+            dependencies:
+              - databricks-feature-engineering
+              - databricks-sdk
+      # App SP gets CAN_MANAGE_RUN granted imperatively after first app create (P9 hardening) —
+      # the app_service_principal_id var is blank on first deploy so it can't be declared here.

@@ -1,0 +1,21 @@
+resources:
+  jobs:
+    reinsurance_98_smoke_test:
+      name: reinsurance_98_smoke_test
+      tags:
+        project: reinsurance_workbench
+      tasks:
+        - task_key: smoke
+          notebook_task:
+            notebook_path: ../notebooks/98_smoke_test.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: smoke
+      environments:
+        - environment_key: smoke
+          spec:
+            client: "5"
+            dependencies:
+              - databricks-sdk
+              - pandas

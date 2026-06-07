@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bricksurance Re — Reinsurance Intelligence Workbench</title>
+<style>
+  :root{--slate:#1e293b;--slate2:#0f172a;--blue:#2563eb;--blue4:#60a5fa;--ink:#0f172a;--mut:#64748b;
+        --line:#e2e8f0;--bg:#f8fafc;--card:#fff;--red:#dc2626;--redbg:#fef2f2;--amber:#d97706;--ambbg:#fffbeb;
+        --green:#16a34a;--greenbg:#f0fdf4;--violet:#6d28d9}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--bg);font-size:14px}
+  .app{display:flex;min-height:100vh}
+  .side{width:248px;background:var(--slate);color:#cbd5e1;flex-shrink:0;display:flex;flex-direction:column;position:fixed;height:100vh}
+  .brand{padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .brand b{color:#fff;font-size:15px;display:block}
+  .brand span{font-size:11px;color:#94a3b8}
+  .nav{flex:1;padding:10px 8px;overflow:auto}
+  .nav a{display:block;padding:9px 12px;border-radius:8px;color:#cbd5e1;text-decoration:none;font-size:13.5px;margin:2px 0;cursor:pointer}
+  .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav a.on{background:var(--blue);color:#fff;font-weight:600}
+  .side .foot{padding:12px;border-top:1px solid rgba(255,255,255,.08)}
+  .rbtn{width:100%;padding:9px;border-radius:8px;background:rgba(255,255,255,.08);color:#e2e8f0;border:1px solid rgba(255,255,255,.12);cursor:pointer;font-size:13px}
+  .rbtn:hover{background:rgba(255,255,255,.16)}
+  .disc{font-size:10.5px;color:#64748b;margin-top:10px;line-height:1.4}
+  .main{margin-left:248px;flex:1;padding:28px 34px;max-width:1180px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:4px}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--mut);margin:0 0 22px;font-size:13.5px}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h3{margin:0 0 8px;font-size:13px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .big{font-size:26px;font-weight:700}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+  .RED,.red{background:var(--redbg);color:var(--red)}
+  .AMBER,.amber{background:var(--ambbg);color:var(--amber)}
+  .GREEN,.green{background:var(--greenbg);color:var(--green)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  tr.click:hover{background:#f1f5f9;cursor:pointer}
+  .bar{height:8px;border-radius:6px;background:#e2e8f0;overflow:hidden;margin-top:6px}
+  .bar>i{display:block;height:100%}
+  .rec{padding:14px 18px;border-radius:12px;font-size:16px;font-weight:700;margin-bottom:18px}
+  .narr{background:#f8fafc;border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:8px;padding:13px 15px;margin-top:10px;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+  .narr .tag{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block}
+  .reasons{margin:8px 0 0;padding-left:18px}.reasons li{margin:3px 0;font-size:13px}
+  .muted{color:var(--mut);font-size:12.5px}
+  .kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+  .kv b{font-weight:600}
+  .btn{padding:7px 13px;border-radius:8px;background:var(--blue);color:#fff;border:0;cursor:pointer;font-size:12.5px;margin-right:8px}
+  .btn.ghost{background:#eef2ff;color:var(--blue)}
+  .note{background:var(--ambbg);border:1px solid #fde68a;border-radius:10px;padding:12px 15px;font-size:12.5px;color:#92400e;margin-top:16px}
+  .prov{background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:12px 15px;font-size:12.5px;color:#3730a3;margin-top:16px}
+  a.lnk{color:var(--blue);text-decoration:none}
+  .loading{color:var(--mut);padding:20px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="side">
+    <div class="brand"><b>Bricksurance Re</b><span>Reinsurance Intelligence Workbench</span></div>
+    <div class="nav" id="nav"></div>
+    <div class="foot">
+      <button class="rbtn" id="resetBtn">↺ Reset demo</button>
+      <div class="disc"><b>About this demo.</b> Bricksurance Re and its cedants (incl. Bricksurance SE) are synthetic.
+        Cat output and placement are external boundaries we ingest from — never rebuilt here. DLT, UC Feature Store,
+        MLflow serving, UC functions, agents (Claude via Foundation Model API) and Genie are real; figures are illustrative.</div>
+    </div>
+  </div>
+  <div class="main" id="main"><div class="loading">Loading…</div></div>
+</div>
+<script>
+const NAV=[["portfolio","Portfolio & Capital"],["queue","Underwriter Queue"],["intake","Intake"],
+           ["ai","Reinsurance AI"],["governance","Governance"],["learn","Learn"]];
+let CFG={};
+const $=(s)=>document.querySelector(s);
+const eur=(v)=>v==null?"—":"€"+Math.round(Number(v)).toLocaleString("en-GB");
+const eurm=(v)=>v==null?"—":"€"+(Number(v)/1e6).toLocaleString("en-GB",{maximumFractionDigits:1})+"m";
+const pct=(v)=>v==null?"—":Number(v).toLocaleString("en-GB",{minimumFractionDigits:1,maximumFractionDigits:1})+"%";
+async function api(p,opt){const r=await fetch("/api"+p,opt);return r.json();}
+
+function renderNav(){const route=(location.hash||"#portfolio").slice(1).split("/")[0];
+  $("#nav").innerHTML=NAV.map(([k,l])=>`<a class="${k===route?'on':''}" href="#${k}">${l}</a>`).join("");}
+
+window.addEventListener("hashchange",route);
+async function boot(){CFG=await api("/config");route();}
+function route(){renderNav();const h=(location.hash||"#portfolio").slice(1);const[r,arg]=h.split("/");
+  ({portfolio:portfolio,queue:queue,intake:intake,ai:ai,governance:governance,learn:learn,sub:subView}[r]||portfolio)(arg);}
+
+// ─────────── Portfolio & Capital (CRO control tower) ───────────
+async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">Loading control tower…</div>';
+  const d=await api("/control-tower");
+  const zones=d.zones.map(z=>{const u=Number(z.utilisation_pct);const col=z.rag;
+    return `<div class="card"><h3>${z.zone_name}</h3>
+      <div class="big">${pct(u)} <span class="pill ${col}">${col}</span></div>
+      <div class="muted">${z.peril} · ${z.region} · ${z.n_treaties} treaties</div>
+      <div class="bar"><i style="width:${Math.min(u,100)}%;background:${col==='RED'?'#dc2626':col==='AMBER'?'#d97706':'#16a34a'}"></i></div>
+      <div class="kv"><span>Current 1-in-200 PML</span><b>${eurm(z.current_pml_1in200_eur)}</b></div>
+      <div class="kv"><span>Appetite</span><b>${eurm(z.appetite_pml_1in200_eur)}</b></div>
+      <div class="kv"><span>Headroom</span><b>${eurm(z.headroom_eur)}</b></div></div>`;}).join("");
+  const c=d.capital||{};
+  m.innerHTML=`<div class="eyebrow">CRO Control Tower</div><h1>Portfolio &amp; Capital</h1>
+    <p class="sub">Peak-zone capacity versus appetite at the 1-in-200, blended across vendor cat output, with the Solvency II capital cross-link.</p>
+    <div class="grid g3">${zones}</div>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><h3>Diversified BSCR</h3><div class="big">${eurm(c.diversified_bscr_eur)}</div><div class="muted">after cross-zone diversification</div></div>
+      <div class="card"><h3>Eligible own funds</h3><div class="big">${eurm(c.eligible_own_funds_eur)}</div></div>
+      <div class="card"><h3>Solvency II ratio</h3><div class="big">${pct(c.solvency_ratio_pct)}</div><div class="muted">own funds ÷ SCR (1-in-200)</div></div>
+    </div>
+    <div class="note">Cat output is blended across ${d.cat_curves.length? '3 vendors that disagree by ~'+pct(d.cat_curves[0].divergence_pct):'multiple vendors'} at the 1-in-200. Databricks ingests and blends vendor EP curves — it never runs a cat engine.</div>
+    <div class="prov">This deal normally touches a placement tool, a separate exposure tool, a bordereaux process, a BI stack, and a spreadsheet for the capital call — here it is one platform.</div>`;}
+
+// ─────────── Underwriter queue ───────────
+async function queue(){const m=$("#main");m.innerHTML='<div class="loading">Loading submissions…</div>';
+  const d=await api("/submissions");
+  const rows=d.rows.map(r=>`<tr class="click" onclick="location.hash='#sub/${r.submission_public_id}'">
+    <td><b>${r.submission_public_id}</b></td><td>${r.cedant_name}</td><td>${r.structure}</td>
+    <td>${r.lob}</td><td>${r.zone_name}</td><td>${pct(Number(r.rol_pct)*100)}</td>
+    <td>${r.inbound_channel==='ADEPT_CDR'?'<span class="pill green">ADEPT/CDR</span>':'<span class="pill amber">Manual</span>'}</td></tr>`).join("");
+  m.innerHTML=`<div class="eyebrow">My Submissions</div><h1>Underwriter Queue</h1>
+    <p class="sub">Click a submission to open the decision view. Heroes: <a class="lnk" href="#sub/sub:900001">sub:900001</a> (fast-track) · <a class="lnk" href="#sub/sub:900002">sub:900002</a> (the portfolio bomb).</p>
+    <div class="card"><table><thead><tr><th>Submission</th><th>Cedant</th><th>Structure</th><th>LoB</th><th>Zone</th><th>RoL</th><th>Channel</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+
+// ─────────── Submission decision view (HERO) ───────────
+async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading">Scoring '+sid+' on live UC functions…</div>';
+  const d=await api("/submission/"+encodeURIComponent(sid)+"/decision");
+  const s=d.summary||{},t=d.triage||{},p=d.price||{},a=d.accumulation||{},cp=d.capital||{};
+  const recCol=d.recommendation==='recommend-to-bind'?'green':d.recommendation==='decline'?'red':'amber';
+  const accRed=a.breaches_appetite, capRed=cp.capital_destructive;
+  const rl=(arr)=>(arr||[]).map(x=>`<li>${x}</li>`).join("");
+  m.innerHTML=`<div class="eyebrow">Submission Decision View</div><h1>${sid}</h1>
+    <p class="sub">${s.cedant||''} · ${s.broker||''} · ${s.structure||''} ${s.layer&&s.layer!=='proportional'?'('+s.layer+')':''} · ${s.zone||''}</p>
+    <div class="rec ${recCol}">Recommendation: ${d.recommendation.toUpperCase()}</div>
+    <div class="grid g2">
+      <div class="card"><h3>Appetite / Triage</h3><div class="big">${(t.decision||'—').replace('_',' ')} <span class="muted" style="font-size:14px">${t.confidence?t.confidence+'%':''}</span></div><ul class="reasons">${rl(t.top_reasons)}</ul></div>
+      <div class="card"><h3>Technical price</h3><div class="big">${p.verdict||'—'}</div>
+        <div class="kv"><span>Predicted loss ratio</span><b>${p.predicted_loss_ratio!=null?pct(p.predicted_loss_ratio*100):'—'}</b></div>
+        <div class="kv"><span>Technical RoL</span><b>${p.technical_rol_pct!=null?pct(p.technical_rol_pct):'—'}</b></div>
+        <div class="kv"><span>Offered RoL</span><b>${p.offered_rol_pct!=null?pct(p.offered_rol_pct):'—'}</b></div>
+        <div class="kv"><span>Rate adequacy</span><b>${p.rate_adequacy??'—'}</b></div></div>
+      <div class="card" style="${accRed?'border-color:#fecaca;background:#fff5f5':''}"><h3>Marginal accumulation ${accRed?'<span class="pill red">BREACH</span>':'<span class="pill green">OK</span>'}</h3>
+        <div class="kv"><span>${a.zone_name||'zone'} — current 1-in-200 PML</span><b>${eurm(a.current_pml_1in200_eur)}</b></div>
+        <div class="kv"><span>+ marginal from this deal</span><b>${eurm(a.marginal_pml_1in200_eur)}</b></div>
+        <div class="kv"><span>= PML after</span><b>${eurm(a.pml_after_eur)}</b></div>
+        <div class="kv"><span>Appetite</span><b>${eurm(a.appetite_eur)}</b></div>
+        ${accRed?`<div class="kv"><span>Breach</span><b style="color:#dc2626">${eurm(a.breach_amount_eur)}</b></div>`:''}
+        ${a.n_correlated?`<div class="muted" style="margin-top:6px">Correlated with ${a.n_correlated} in-force treaties: ${(a.correlated_treaty_ids||[]).join(', ')}</div>`:''}
+        <ul class="reasons">${rl(a.reasons)}</ul></div>
+      <div class="card" style="${capRed?'border-color:#fecaca;background:#fff5f5':''}"><h3>Marginal capital ${capRed?'<span class="pill red">DESTRUCTIVE</span>':'<span class="pill green">ACCRETIVE</span>'}</h3>
+        <div class="kv"><span>Expected return</span><b>${eurm(cp.expected_return_eur)}</b></div>
+        <div class="kv"><span>Marginal SCR</span><b>${eurm(cp.marginal_scr_eur)}</b></div>
+        <div class="kv"><span>RoRAC</span><b style="${capRed?'color:#dc2626':''}">${pct(cp.rorac_pct)}</b></div>
+        <div class="kv"><span>Hurdle</span><b>${pct(cp.hurdle_pct)}</b></div>
+        <ul class="reasons">${rl(cp.reasons)}</ul></div>
+    </div>
+    <div style="margin-top:18px"><b>Reinsurance AI synthesis</b> <span class="muted">— narration only; structured panels above call the UC functions live.</span>
+      <div id="narr-supervisor" class="narr"><span class="tag">Supervisor</span><span class="muted">loading…</span></div>
+      <div id="narr-challenge" class="narr"><span class="tag">Challenge / second opinion</span><span class="muted">loading…</span></div>
+      <div id="narr-dataquality" class="narr"><span class="tag">Data quality</span><span class="muted">loading…</span></div>
+    </div>`;
+  ["supervisor","challenge","dataquality"].forEach(async role=>{
+    try{const n=await api("/submission/"+encodeURIComponent(sid)+"/narrate?role="+role);
+      $("#narr-"+role).innerHTML=`<span class="tag">${role} · ${n.cache||''}</span>${n.text||''}`;}
+    catch(e){$("#narr-"+role).innerHTML=`<span class="tag">${role}</span><span class="muted">unavailable</span>`;}});}
+
+// ─────────── Intake ───────────
+async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loading intake…</div>';
+  const d=await api("/intake");
+  const ch=d.channels.map(c=>`<tr><td>${c.path==='structured'?'<span class="pill green">ADEPT/CDR (structured)</span>':'<span class="pill amber">Manual</span>'}</td><td>${c.completeness_band}</td><td>${c.n}</td></tr>`).join("");
+  const qr=d.quarantine.map(q=>`<tr><td>${q.submission_public_id}</td><td>${q.peril}</td><td><span class="pill red">${q.quarantine_reason}</span></td></tr>`).join("")||'<tr><td colspan=3 class="muted">none</td></tr>';
+  m.innerHTML=`<div class="eyebrow">Connectivity boundary</div><h1>Intake</h1>
+    <p class="sub">Submissions arrive via the ADEPT/CDR (ACORD GRLC-shaped) structured inbound mock, or the messy manual path. DLT quality gates quarantine bad rows.</p>
+    <div class="grid g2"><div class="card"><h3>Inbound channels</h3><table><thead><tr><th>Path</th><th>Completeness</th><th>Submissions</th></tr></thead><tbody>${ch}</tbody></table></div>
+    <div class="card"><h3>Quarantined bordereaux rows</h3><table><thead><tr><th>Submission</th><th>Peril</th><th>Reason</th></tr></thead><tbody>${qr}</tbody></table></div></div>
+    <div class="note">Mock feed only — never a placement network. The MRC-slip / CDR extraction shape is reused, not rebuilt.</div>`;}
+
+// ─────────── Reinsurance AI roster ───────────
+async function ai(){const m=$("#main");m.innerHTML='<div class="loading">Loading agents…</div>';
+  const d=await api("/agents");
+  const card=(n)=>`<div class="card"><h3>${n.kind}</h3><b>${n.name}</b><div class="muted" style="margin-top:4px">${n.desc}</div>${n.endpoint?`<div class="muted" style="margin-top:6px;font-size:11px">↳ ${n.endpoint}</div>`:''}</div>`;
+  m.innerHTML=`<div class="eyebrow">Reinsurance AI</div><h1>One supervisor. Real specialists.</h1>
+    <p class="sub">The supervisor narrates only and never binds. Structured scoring is done by UC functions and served models; the LLM agents narrate the findings.</p>
+    <div class="grid g3">${d.nodes.map(card).join("")}</div>
+    <div class="prov">Open <a class="lnk" href="#sub/sub:900002">sub:900002</a> to see the supervisor synthesise triage, price, accumulation and capital into one recommendation.</div>`;}
+
+// ─────────── Governance ───────────
+async function governance(){const m=$("#main");m.innerHTML='<div class="loading">Loading governance…</div>';
+  const d=await api("/governance/inventory");
+  const inv=d.inventory.map(r=>`<tr><td><b>${r.table_name}</b></td><td>${r.fields}</td><td><span class="pill ${r.sensitivity_tier==='Restricted'?'red':r.sensitivity_tier==='Confidential'?'amber':'green'}">${r.sensitivity_tier}</span></td><td>${r.retention}</td><td class="muted">${r.used_for}</td></tr>`).join("");
+  const cp=d.counterparties.map(r=>`<tr><td>${r.cedant_name}</td><td>${r.domicile}</td><td><span class="pill green">${r.sanctions_status}</span></td><td><span class="pill ${r.esg_status==='amber'?'amber':'green'}">${r.esg_status}</span></td></tr>`).join("");
+  const sv=d.solvency&&d.solvency[0]||{};
+  m.innerHTML=`<div class="eyebrow">Governance</div><h1>What's collected &amp; how decisions are made</h1>
+    <p class="sub">Data inventory with sensitivity tiers, sanctions/ESG counterparty screening, and the submission-to-bind audit trail.</p>
+    <div class="card"><h3>Data inventory</h3><table><thead><tr><th>Table</th><th>Fields</th><th>Sensitivity</th><th>Retention</th><th>Used for</th></tr></thead><tbody>${inv}</tbody></table></div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card"><h3>Sanctions / ESG screening</h3><table><thead><tr><th>Cedant</th><th>Domicile</th><th>Sanctions</th><th>ESG</th></tr></thead><tbody>${cp}</tbody></table></div>
+      <div class="card"><h3>Capital / Solvency II cross-link</h3><div class="kv"><span>Solvency II ratio</span><b>${pct(sv.solvency_ratio_pct)}</b></div><div class="kv"><span>Diversified BSCR</span><b>${eurm(sv.diversified_bscr_eur)}</b></div><div class="muted" style="margin-top:8px">${sv.note||''}</div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>Decision audit — lookup</h3>
+      <input id="auditId" placeholder="sub:900002" value="sub:900002" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-right:8px"/>
+      <button class="btn" onclick="loadAudit()">Show trail</button><div id="auditOut" style="margin-top:12px"></div></div>`;
+  loadAudit();}
+async function loadAudit(){const id=$("#auditId").value;const d=await api("/governance/audit/"+encodeURIComponent(id));
+  const rows=(d.audit||[]).map(r=>`<div class="kv"><span>${r.decision_id} · ${r.recommendation}</span><b>${r.bound==='true'||r.bound===true?'BOUND':'not bound'}</b></div>
+    <div class="muted">triage ${r.triage_decision} · price ${r.technical_verdict} · breaches appetite ${r.breaches_appetite} · capital-destructive ${r.capital_destructive} · ${r.decided_by}</div>`).join("")||'<span class="muted">no audit rows</span>';
+  $("#auditOut").innerHTML=rows;}
+
+// ─────────── Learn ───────────
+function learn(){const m=$("#main");
+  m.innerHTML=`<div class="eyebrow">Learn</div><h1>Reinsurance 101</h1>
+    <p class="sub">The treaty value chain and why the boundaries matter.</p>
+    <div class="card"><h3>The submission-to-bind lifecycle</h3>
+      <p>Submission (MRC slip + bordereaux + exposure) → triage / appetite → technical pricing → <b>marginal accumulation + capital</b> (the crux) → underwriter decision → bind. A deal can look attractive standalone and still be toxic in aggregate.</p></div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card"><h3>Own the boundaries</h3><p class="muted">Bricksurance Re never rebuilds the cat engine or the placement network. It ingests vendor EP curves (blending vendors that disagree) and broker submissions, then enriches around them — accumulation, capital, governance.</p></div>
+      <div class="card"><h3>Why 1-in-200 matters</h3><p class="muted">The 1-in-200 (99.5th percentile, 1-year) PML is the Solvency II capital cross-link. Appetite, accumulation and the marginal SCR all hang off it.</p></div>
+    </div>
+    <div class="prov"><b>Built on.</b> Databricks medallion + DLT, Unity Catalog Feature Store, MLflow Model Serving, UC functions, Mosaic AI agents (Claude via Foundation Model API) and AI/BI Genie. See PROVENANCE_MAPPING.md.</div>`;}
+
+$("#resetBtn").onclick=async()=>{if(!confirm("Reset the demo (re-anchor dates, re-warm heroes)?"))return;
+  $("#resetBtn").textContent="Resetting…";try{const r=await api("/reset",{method:"POST"});
+  $("#resetBtn").textContent=r.status==='triggered'?"↺ Reset triggered":"↺ Reset demo";}catch(e){$("#resetBtn").textContent="↺ Reset demo";}};
+boot();
+</script>
+</body>
+</html>

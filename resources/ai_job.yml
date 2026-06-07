@@ -1,0 +1,39 @@
+resources:
+  jobs:
+    reinsurance_06_ai:
+      name: reinsurance_06_ai
+      tags:
+        project: reinsurance_workbench
+      tasks:
+        - task_key: agent_tools
+          notebook_task:
+            notebook_path: ../notebooks/06_agent_tools.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ai
+        - task_key: agents
+          notebook_task:
+            notebook_path: ../notebooks/06_agents.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              fm_endpoint: ${var.fm_endpoint}
+          environment_key: ai
+        - task_key: governance
+          depends_on:
+            - task_key: agent_tools
+          notebook_task:
+            notebook_path: ../notebooks/07_governance.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ai
+      environments:
+        - environment_key: ai
+          spec:
+            client: "5"
+            dependencies:
+              - mlflow
+              - databricks-sdk
+              - pandas
