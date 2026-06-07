@@ -25,6 +25,7 @@ fqn = f"{catalog}.{schema}"
 
 import mlflow, pandas as pd
 from mlflow.models.signature import infer_signature
+from mlflow.models.resources import DatabricksServingEndpoint
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import ServedEntityInput, EndpointCoreConfigInput
 
@@ -88,6 +89,9 @@ with mlflow.start_run(run_name="reinsurance_agent"):
         artifact_path="model", python_model=ReinsuranceAgent(),
         signature=sig, input_example=example,
         pip_requirements=["mlflow", "pandas"],
+        # Declare the FM endpoint as a resource so Model Serving injects a scoped credential at serving time
+        # (lets get_deploy_client call the FM API without a baked-in token).
+        resources=[DatabricksServingEndpoint(endpoint_name=FM)],
         registered_model_name=f"{fqn}.model_reinsurance_agent")
 ver = mi.registered_model_version
 print("agent model v", ver)
@@ -101,11 +105,12 @@ def deploy_agent(endpoint, role):
                                entity_version=ver, workload_size="Small", scale_to_zero_enabled=True,
                                environment_vars={"AGENT_ROLE": role, "FM_ENDPOINT": FM})
     existing = [e.name for e in w.serving_endpoints.list()]
+    # Non-blocking create/update so all three endpoints build concurrently.
     if endpoint in existing:
-        w.serving_endpoints.update_config_and_wait(name=endpoint, served_entities=[entity])
+        w.serving_endpoints.update_config(name=endpoint, served_entities=[entity])
     else:
-        w.serving_endpoints.create_and_wait(name=endpoint, config=EndpointCoreConfigInput(name=endpoint, served_entities=[entity]))
-    print("deployed", endpoint, "(role:", role + ")")
+        w.serving_endpoints.create(name=endpoint, config=EndpointCoreConfigInput(name=endpoint, served_entities=[entity]))
+    print("deploying", endpoint, "(role:", role + ")")
 
 deploy_agent("reinsurance-dataquality", "dataquality")
 deploy_agent("reinsurance-challenge", "challenge")

@@ -42,6 +42,8 @@ targets:
     variables:
       catalog: lr_dev_aws_us_catalog
       warehouse_id: "a3b61648ea4809e3"
+      # App SP captured on first app create (2026-06-07). Grants (UC + reset CAN_MANAGE_RUN) applied imperatively.
+      app_service_principal_id: "95b10ab0-a098-445f-8af2-a9d0025df59b"
 
 sync:
   exclude:
