@@ -31,8 +31,10 @@ variable (`catalog`). Schema is fixed `bricksurance_re`.
 2. `databricks bundle run reinsurance_medallion -t dev`   (DLT)
 3. `databricks bundle run reinsurance_05_ml -t dev`        (features + models + crux; serving deploy ~10 min)
 4. `databricks bundle run reinsurance_06_ai -t dev`        (agent tools + agents + governance)
-5. Grant the **app service principal**: `CAN_USE` warehouse; `CAN_QUERY` the 5 endpoints; `USE SCHEMA` +
-   `SELECT` + `EXECUTE` on `bricksurance_re`; `CAN_MANAGE_RUN` on `reinsurance_99_reset`.
+5. Grant the **app service principal**: `CAN_USE` warehouse; `CAN_QUERY` the 5 endpoints (handled by app.yml
+   resource bindings); `USE CATALOG` + `USE SCHEMA` + `SELECT` + `EXECUTE` + `MODIFY` + **`CREATE TABLE`** on
+   `bricksurance_re` (CREATE TABLE is required so the app can create the narration cache table on first run);
+   `CAN_MANAGE_RUN` on `reinsurance_99_reset`.
 6. Set `app_service_principal_id` var + (optionally) declare the reset-job CAN_MANAGE_RUN permission, redeploy.
 7. (Optional) Create the Genie space; set `GENIE_SPACE_ID` in app.yaml.
 8. Pre-warm: open both heroes, or run `reinsurance_98_smoke_test`.
