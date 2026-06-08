@@ -76,7 +76,7 @@ print("fn_triage_submission created")
 spark.sql(f"""
 CREATE OR REPLACE FUNCTION {fqn}.fn_price_submission(p_submission_public_id STRING)
 RETURNS STRUCT<predicted_loss_ratio DOUBLE, combined_ratio_pct DOUBLE, offered_rol_pct DOUBLE, rate_adequacy DOUBLE, verdict STRING>
-COMMENT 'Technically price a reinsurance submission: returns the model expected (burning-cost) loss ratio, the projected combined ratio (loss + expense), the offered rate-on-line, a rate-adequacy ratio (target combined / projected combined; >=1 is adequate), and a verdict (adequate / thin / inadequate). Use when asked whether a submission is adequately rated standalone.'
+COMMENT 'Technically price a reinsurance submission the REINSURANCE way — by rate-on-line, expected loss, burning cost and exposure/experience rating over the loss bordereaux. This is NOT a primary-insurance frequency-severity GLM and uses none of the pricing_workbench pricing models. Returns the model expected (burning-cost) loss ratio, the projected combined ratio (loss + expense), the offered rate-on-line, a rate-adequacy ratio (target combined / projected combined; >=1 is adequate), and a verdict (adequate / thin / inadequate). Use when asked whether a submission is adequately rated standalone.'
 RETURN
   SELECT named_struct(
     'predicted_loss_ratio', round(plr, 4),

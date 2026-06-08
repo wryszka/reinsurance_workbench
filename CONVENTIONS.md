@@ -42,6 +42,11 @@ src/                      # (optional) python utils
   `EP = next(n for n in [e.name for e in w.serving_endpoints.list()] if "<substring>" in n)`.
 - **GOTCHA:** `CREATE OR REPLACE FUNCTION` revokes EXECUTE grants to agent SPs → re-grant / redeploy agents after recreating functions.
 
+## Pricing = reinsurance pricing, NOT GLM (sacred invariant 9)
+- Price by **rate-on-line, expected loss, burning cost, exposure/experience rating** over loss bordereaux. Never a primary-insurance frequency-severity-demand GLM.
+- **Reuse `pricing-workbench` for app shell + DAB patterns ONLY — never its pricing models** (`freq_glm`/`sev_glm`/`demand_gbm`/rating engine). `model_loss_ratio` here is a burning-cost / experience-rating estimator; `fn_price_submission` returns RoL adequacy + combined ratio.
+- **Scope boundary:** go deep on submission→triage→price→accumulation→capital; do NOT build IFRS 17 / QRTs / regulatory reporting (that's the Solvency II demo) — bridge only via the 1-in-200 SCR cross-link; IFRS 17 is a roadmap mention.
+
 ## Models + serving + Feature Store (mirror claims 05_ml_models.py)
 - Feature Store: `fe.create_training_set(feature_lookups=[FeatureLookup(table_name=fqn('feature_*'), lookup_key='submission_public_id')], label=...)`.
 - Log with signature + input_example; `registered_model_name = {catalog}.{schema}.model_*`; set alias `champion`.

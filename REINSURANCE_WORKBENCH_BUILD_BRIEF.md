@@ -11,6 +11,7 @@
 - **Minimal checks, no mid-build smoke.** Run only light inline sanity checks to avoid compounding broken work (does the table exist, does the function return, does the endpoint respond). **Do not run full smoke tests at each stage.** The single end-to-end pass is P10; the final review is Laurence's.
 - **Thin app, real Databricks (hard rule).** The Databricks App is a **presentation layer only** — it authenticates, calls real Databricks objects, and renders. It contains **no business logic, no data transformation, no scoring, no computation**. Every process runs as a real Databricks object: DLT pipelines, UC Feature Store, MLflow models + serving endpoints, UC functions, Agent Bricks / managed supervisor endpoints, Genie, SQL/dashboards, UC governance. Structured panels always call real UC functions / endpoints live. The only caching is a switchable latency aid (`USE_CACHE`) wrapping **LLM narration only** — never the structured decision outputs.
 - **Modular as far as possible.** Each phase produces independent, composable modules with clean interfaces. UC functions are atomic and individually callable. Agents are separate serving endpoints composed by the supervisor. The crux (§4) is its own module others call. The app is fully decoupled from compute. Everything config-driven, reusable, and redeployable. No tight coupling between layers — bronze → silver → gold → features → models → agents → app communicate through stable, documented contracts.
+- **Scope boundary — go deep on the spine, not wide into reporting.** Build the **submission → triage → price → accumulation → capital** spine *deeply* — that is the demo. **Do NOT build IFRS 17, QRTs, or regulatory reporting**; that breadth lives in the **Solvency II demo**, and this demo bridges to it only through the **1-in-200 SCR capital cross-link** (§7). **IFRS 17 is a roadmap-strip mention only** — name it as "next door / on the roadmap," never implement it. Resist scope-creep into financial reporting; every hour goes into making the spine and the crux land.
 
 ---
 
@@ -38,6 +39,7 @@
 6. **Own the boundaries.** Never build a cat engine or a placement network. Ingest from them; enrich around them.
 7. **Escalate-not-bind.** Agents advise, challenge, flag, escalate — never bind. Humans decide.
 8. **No cross-catalog hard dependency** on the other demos.
+9. **Reinsurance pricing, not GLM.** Price treaties/portfolios the reinsurance way — by **rate-on-line, expected loss, burning cost, and exposure/experience rating** — never with a primary-insurance frequency-severity-demand GLM. **Reuse `pricing_workbench` for its app shell and DAB patterns ONLY — never its pricing models** (`freq_glm`, `sev_glm`, `demand_gbm`, the rating engine). The pricing model here is a burning-cost / experience-rating estimator over loss bordereaux; `fn_price_submission` returns RoL adequacy + combined ratio, never a GLM premium.
 
 ---
 
@@ -59,7 +61,7 @@ Each phase: **goal · deliverables · runs in Databricks as · module boundary.*
 
 **P4 — Feature engineering (UC Feature Store).** Triage + pricing features keyed by `submission_public_id`. *Runs as:* UC Feature Store tables/functions. *Boundary:* feature contract consumed by models and the crux.
 
-**P5 — Models + serving + THE CRUX (§4).** Triage/appetite, technical pricing, and the marginal **accumulation + capital impact** — registered in MLflow, served, deterministic and explicable for both heroes. *Runs as:* MLflow models + serving endpoints, wrapped as atomic UC functions. *Boundary:* the crux is its own UC function/endpoint that everything downstream calls; nothing recomputes it.
+**P5 — Models + serving + THE CRUX (§4).** Triage/appetite, technical pricing, and the marginal **accumulation + capital impact** — registered in MLflow, served, deterministic and explicable for both heroes. **Pricing is reinsurance pricing (invariant 9): rate-on-line, expected loss, burning cost, exposure/experience rating — NOT a GLM, and NOT `pricing_workbench`'s pricing models** (reuse that repo only for app shell + DAB patterns). The pricing model is a burning-cost / experience-rating estimator over the loss bordereaux that feeds RoL adequacy + combined ratio. *Runs as:* MLflow models + serving endpoints, wrapped as atomic UC functions. *Boundary:* the crux is its own UC function/endpoint that everything downstream calls; nothing recomputes it.
 
 **P6 — Agent Bricks (Reinsurance AI).** UC-function tools + LLM sub-agents + Genie + managed supervisor + cache (§7). *Runs as:* real serving endpoints + UC functions + a Genie space + a managed supervisor (Agents UI, captured in a runbook). *Boundary:* each agent is an independent endpoint; the supervisor composes them.
 
@@ -85,7 +87,7 @@ Build and lock in P5. Everything downstream calls it; nothing recomputes it.
 
 ## 5. Data model + the two heroes (sacred)
 
-Tables: **submissions** (cedant, broker, treaty/fac, proportional/XoL, layers/attachment/limit, LoB, territories, perils, inception, RoL); **cedant exposure & bordereaux** (premium + loss; Bricksurance SE seeded as one cedant's cessions, own tables); **loss history** (as-if, large, cat); **cat output** (per-peril/region EP curves, PML/AEP/OEP, multi-vendor-divergent); **in-force portfolio** (treaties, cessions, accumulations by peak zone, as-at snapshot); **pricing** (technical price, expected loss, capital cost, RoL adequacy); **capital** (SCR contribution, diversification); **counterparties** (credit quality).
+Tables: **submissions** (cedant, broker, treaty/fac, proportional/XoL, layers/attachment/limit, LoB, territories, perils, inception, RoL); **cedant exposure & bordereaux** (premium + loss; Bricksurance SE seeded as one cedant's cessions, own tables); **loss history** (as-if, large, cat); **cat output** (per-peril/region EP curves, PML/AEP/OEP, multi-vendor-divergent); **in-force portfolio** (treaties, cessions, accumulations by peak zone, as-at snapshot); **pricing** (reinsurance pricing per invariant 9 — **rate-on-line, expected loss, burning cost, exposure/experience rating; never a GLM**: technical RoL, expected loss, combined ratio, RoL adequacy); **capital** (SCR contribution, diversification); **counterparties** (credit quality).
 
 **`sub:900001` — clean fast-track.** European Motor Quota Share, reputable cedant, clean bordereaux, adequate rate, peril/territory away from peak cat zones, negligible marginal accumulation, good counterparty → recommend-to-bind.
 
@@ -111,7 +113,7 @@ Formatting: money €/£ with commas; RoL/confidence as % (1 dp); PML/SCR consis
 
 ## 7. Agent architecture (pragmatic mix — all real endpoints)
 
-- **UC-function tools** (deterministic scorers, rich COMMENT so the supervisor routes off them): `fn_triage_submission`, `fn_price_submission`, `fn_accumulation_impact`, `fn_capital_impact`, `fn_submission_summary`, `fn_portfolio_position`.
+- **UC-function tools** (deterministic scorers, rich COMMENT so the supervisor routes off them): `fn_triage_submission`, `fn_price_submission` (**reinsurance pricing per invariant 9 — RoL / expected loss / burning cost / exposure-experience rating; returns RoL adequacy + combined ratio, NEVER a GLM premium**), `fn_accumulation_impact`, `fn_capital_impact`, `fn_submission_summary`, `fn_portfolio_position`.
 - **LLM sub-agents:** Data Quality (bordereaux/exposure completeness narrative); Challenge / Second-Opinion (argues the other side).
 - **Genie** — "Ask the Portfolio".
 - **Managed Reinsurance AI supervisor** — Agents UI, captured in a runbook. Narrates only.
