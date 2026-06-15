@@ -30,6 +30,13 @@ resources:
               catalog: ${var.catalog}
               schema: ${var.schema}
           environment_key: ml
+        - task_key: event_engine
+          notebook_task:
+            notebook_path: ../notebooks/05c_event_and_whatif.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
       environments:
         - environment_key: ml
           spec:

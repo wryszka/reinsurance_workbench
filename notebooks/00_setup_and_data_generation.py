@@ -74,10 +74,15 @@ cedants_df.write.mode("overwrite").saveAsTable(f"{fqn}.ref_cedants")
 
 # Counterparties — credit quality (light; not the hero path).
 RATING_PD = {"AA": 0.02, "AA-": 0.03, "A+": 0.05, "A": 0.06, "A-": 0.08, "BBB+": 0.15, "BBB": 0.24}
-cp_rows = [(c[0], c[1], c[3], c[4], RATING_PD[c[3]], "Stable") for c in CEDANTS]
+# CED07 (Vistula) carries a regulatory-watch signal — a real input the Counterparty agent injects into a decision.
+WATCH = {"CED07": "Local regulator (KNF) opened a solvency review of the group in the last quarter — outlook revised to Negative."}
+cp_rows = [(c[0], c[1], c[3], c[4], RATING_PD[c[3]],
+            "Negative" if c[0] in WATCH else "Stable",
+            c[0] in WATCH, WATCH.get(c[0], "")) for c in CEDANTS]
 cp_df = spark.createDataFrame(
-    cp_rows, "cedant_id string, cedant_name string, rating string, credit_quality_step int, one_year_pd_pct double, outlook string")
-cp_df.write.mode("overwrite").saveAsTable(f"{fqn}.counterparties")
+    cp_rows, "cedant_id string, cedant_name string, rating string, credit_quality_step int, "
+             "one_year_pd_pct double, outlook string, regulatory_watch boolean, watch_note string")
+cp_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.counterparties")
 print("reference data written")
 
 # COMMAND ----------
@@ -185,6 +190,71 @@ acc.select("zone_id", "current_pml_1in200_eur", "appetite_pml_1in200_eur", "util
 
 # COMMAND ----------
 
+# MAGIC %md ## Cat event — hero live event + cross-treaty loss allocation (we ingest the footprint, compute the response)
+
+# COMMAND ----------
+
+# Hero event: a NW-European windstorm that just made landfall. We ingest the vendor footprint (industry loss +
+# zone) and COMPUTE the book's response per treaty — this is the live cat-event-response wow. ~1-in-35 severity.
+EVENT_ID = "evt:900001"
+EVENT_INDUSTRY_LOSS = 18_000_000_000      # market loss from the event (vendor footprint)
+EVENT_GROSS_TARGET = 150_000_000          # calibrate the book's gross loss to a material-but-survivable number
+events_df = spark.createDataFrame(
+    [(EVENT_ID, "Windstorm Eckhart", "Windstorm", "EU_WIND", "NW Europe (DE, NL, BE, FR)",
+      EVENT_INDUSTRY_LOSS, 35)],
+    "event_public_id string, event_name string, peril string, zone_id string, region string, "
+    "industry_loss_eur long, return_period int") \
+    .withColumn("event_date", F.date_sub(F.lit(TODAY), F.lit(1))) \
+    .withColumn("_landing_ingested_at", F.current_timestamp())
+events_df.write.mode("overwrite").saveAsTable(f"{fqn}.events")
+
+# Per in-force treaty in the event footprint zone, derive the cedant's event loss (deterministic share of the
+# industry loss) then compute the ceded loss to our layer/share. Scale the book gross to the target.
+euw = spark.table(f"{fqn}.inforce_treaties").filter("zone_id = 'EU_WIND'")
+raw = (euw
+       .withColumn("cedant_event_loss",
+                   F.lit(EVENT_INDUSTRY_LOSS) * (F.lit(0.0010) + F.pmod(F.crc32("treaty_id"), F.lit(100)) / 100.0 * F.lit(0.0030)))
+       .withColumn("ceded_raw",
+                   F.when(F.col("structure").isin("Cat XoL", "Risk XoL"),
+                          F.least(F.col("limit_eur").cast("double"),
+                                  F.greatest(F.lit(0.0), F.col("cedant_event_loss") - F.col("attachment_eur"))))
+                    .otherwise(F.col("cedant_event_loss") * 0.25)))
+sum_raw = raw.agg(F.sum("ceded_raw").alias("s")).collect()[0]["s"] or 1.0
+scale = EVENT_GROSS_TARGET / sum_raw
+losses = (raw
+          .withColumn("ceded_loss_eur", F.round(F.col("ceded_raw") * F.lit(scale)).cast("long"))
+          .filter("ceded_loss_eur > 0")
+          .withColumn("reinstatement_flag", F.col("ceded_loss_eur") >= F.col("limit_eur") * 0.9)
+          .withColumn("reinstatement_premium_eur",
+                      F.round(F.col("ceded_premium_eur") * F.least(F.lit(1.0), F.col("ceded_loss_eur") / F.col("limit_eur"))).cast("long"))
+          .withColumn("event_public_id", F.lit(EVENT_ID))
+          .select("event_public_id", "treaty_id", "cedant_id", "zone_id", "structure",
+                  "limit_eur", "ceded_loss_eur", "reinstatement_flag", "reinstatement_premium_eur", "is_correlated_ref"))
+losses.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.event_treaty_losses")
+
+# Per-event response summary (single row per event) — gross, reinstatement income, net, top exposed cedant.
+etl = spark.table(f"{fqn}.event_treaty_losses")
+agg = etl.agg(F.sum("ceded_loss_eur").alias("gross"), F.sum("reinstatement_premium_eur").alias("reinst"),
+              F.count("*").alias("n")).collect()[0]
+by_ced = (etl.groupBy("cedant_id").agg(F.sum("ceded_loss_eur").alias("cl"))
+          .join(spark.table(f"{fqn}.ref_cedants").select("cedant_id", "cedant_name"), "cedant_id")
+          .orderBy(F.desc("cl"))).collect()
+top = by_ced[0]
+ev = events_df.collect()[0]
+gold_event = spark.createDataFrame([(
+    EVENT_ID, ev["event_name"], ev["region"], int(EVENT_INDUSTRY_LOSS), int(ev["return_period"]),
+    int(agg["n"]), int(agg["gross"]), int(agg["reinst"]), int(agg["gross"] - agg["reinst"]),
+    top["cedant_id"], top["cedant_name"], int(top["cl"]))],
+    "event_public_id string, event_name string, region string, industry_loss_eur long, return_period int, "
+    "n_treaties_responding int, gross_loss_eur long, reinstatement_premium_eur long, net_loss_eur long, "
+    "top_cedant_id string, top_cedant_name string, top_cedant_loss_eur long") \
+    .withColumn("event_date", F.date_sub(F.lit(TODAY), F.lit(1)))
+gold_event.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.gold_event_response")
+print(f"event {EVENT_ID}: {agg['n']} treaties respond, gross {agg['gross']:,}, net {agg['gross']-agg['reinst']:,}, "
+      f"top cedant {top['cedant_name']} {top['cl']:,}")
+
+# COMMAND ----------
+
 # MAGIC %md ## Landing — submissions (MRC-slip / GRLC-CDR shaped) + bordereaux + exposure
 
 # COMMAND ----------
@@ -248,9 +318,17 @@ for i in range(38):
                     random.randint(80_000_000, 280_000_000), round(random.uniform(0.2, 0.4), 2),
                     0.0, round(random.uniform(0.55, 0.78), 2), channel, completeness))
 
+# Renewal-season framing: submissions flood the desk in the run-up to the 1-Jan renewal. received_date is
+# spread over the last ~20 days; status is a deterministic mix (most new, some worked) so the queue feels alive.
+NEXT_JAN = datetime.date(TODAY.year + 1, 1, 1)
 subs_df = spark.createDataFrame(subs, SUB_SCHEMA) \
-    .withColumn("inception_date", F.add_months(F.lit(TODAY), 1)) \
-    .withColumn("received_date", F.date_sub(F.lit(TODAY), F.lit(3))) \
+    .withColumn("renewal_date", F.lit(NEXT_JAN)) \
+    .withColumn("inception_date", F.lit(NEXT_JAN)) \
+    .withColumn("received_date", F.date_sub(F.lit(TODAY), F.pmod(F.crc32(F.col("submission_public_id")), F.lit(20)).cast("int"))) \
+    .withColumn("status", F.when(F.col("submission_public_id").isin("sub:900001", "sub:900002"), F.lit("new"))
+                .otherwise(F.element_at(F.array(F.lit("new"), F.lit("new"), F.lit("new"), F.lit("new"), F.lit("new"),
+                                                F.lit("new"), F.lit("quoted"), F.lit("quoted"), F.lit("bound"), F.lit("declined")),
+                                        (F.pmod(F.crc32(F.col("submission_public_id")), F.lit(10)) + 1).cast("int")))) \
     .withColumn("_landing_ingested_at", F.current_timestamp())
 subs_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.landing_submissions")
 print(f"landing_submissions: {subs_df.count()} (incl. 2 sacred heroes)")
@@ -309,8 +387,8 @@ print("bordereaux + exposure written (incl. 1 seeded messy loss row → quaranti
 # COMMAND ----------
 
 for t in ["ref_peak_zones", "ref_cedants", "counterparties", "cat_vendor_curves", "inforce_treaties",
-          "inforce_accumulation", "landing_submissions", "landing_premium_bordereaux",
-          "landing_loss_bordereaux", "landing_exposure"]:
+          "inforce_accumulation", "events", "event_treaty_losses", "gold_event_response", "landing_submissions",
+          "landing_premium_bordereaux", "landing_loss_bordereaux", "landing_exposure"]:
     try:
         spark.sql(f"ALTER TABLE {fqn}.{t} SET TAGS ('project' = 'reinsurance_workbench', 'demo' = 'bricksurance_re')")
     except Exception as e:
@@ -318,5 +396,6 @@ for t in ["ref_peak_zones", "ref_cedants", "counterparties", "cat_vendor_curves"
 
 print("=== generation complete ===")
 for t in ["landing_submissions", "landing_premium_bordereaux", "landing_loss_bordereaux",
-          "landing_exposure", "cat_vendor_curves", "inforce_treaties", "inforce_accumulation"]:
+          "landing_exposure", "cat_vendor_curves", "inforce_treaties", "inforce_accumulation",
+          "events", "event_treaty_losses"]:
     print(f"  {t:32s} {spark.table(f'{fqn}.{t}').count():>6} rows")
