@@ -169,7 +169,7 @@ async function runWhatif(sid,limit){const out=$("#wi-out");if(!out)return;
     <div class="kv"><span>${r.breaches_appetite?'Breach':'Headroom'}</span><b style="color:${r.breaches_appetite?'#dc2626':'#16a34a'}">${eurm(r.breaches_appetite?r.breach_amount_eur:r.headroom_after_eur)}</b></div>`;}
 
 // ─────────── Work a submission (HERO decision view) ───────────
-async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading">Scoring '+sid+' on live UC functions…</div>';
+async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading">Scoring '+sid+' on live UC functions…</div>';DEC_SID=sid;
   const d=await api("/submission/"+encodeURIComponent(sid)+"/decision");
   const s=d.summary||{},t=d.triage||{},p=d.price||{},a=d.accumulation||{},cp=d.capital||{};
   const recCol=d.recommendation==='recommend-to-bind'?'green':d.recommendation==='decline'?'red':'amber';
@@ -185,7 +185,15 @@ async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading"
       <div id="wi-out" style="margin-top:8px"></div></div>`:'';
   m.innerHTML=`<div class="eyebrow">Underwriter · work a submission</div><h1>${sid}</h1>
     <p class="sub">${s.cedant||''} · ${s.broker||''} · ${s.structure||''} ${s.layer&&s.layer!=='proportional'?'('+s.layer+')':''} · ${s.zone||''}</p>
-    <div class="rec ${recCol}">Recommendation: ${d.recommendation.toUpperCase()}</div>
+    <div class="rec ${recCol}">Recommendation: ${d.recommendation.toUpperCase()}
+      ${(d.recommendation_detail&&d.recommendation_detail.basis||[]).length?`<div style="font-size:12px;font-weight:400;margin-top:4px;opacity:.9">${(d.recommendation_detail.basis||[]).join(' · ')}</div>`:''}</div>
+    <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:13px">Underwriter decision</b><span class="muted" style="font-size:12px">escalate-not-bind — the AI advises, you decide; the trail is kept.</span>
+      <span style="margin-left:auto"></span>
+      <button class="btn ghost" onclick="logDecision('recommend-to-bind')">Bind</button>
+      <button class="btn ghost" onclick="logDecision('refer')">Refer</button>
+      <button class="btn ghost" onclick="logDecision('decline')">Decline</button>
+      <span id="dec-out" class="muted" style="font-size:12px;flex-basis:100%"></span></div>
     <div class="grid g2">
       <div class="card"><h3>Appetite / Triage</h3><div class="big">${(t.decision||'—').replace('_',' ')} <span class="muted" style="font-size:14px">${t.confidence?t.confidence+'%':''}</span></div><ul class="reasons">${rl(t.top_reasons)}</ul></div>
       <div class="card"><h3>Technical price <span class="muted" style="font-size:11px">(RoL · burning cost, not a GLM)</span></h3><div class="big">${p.verdict||'—'}</div>
@@ -208,6 +216,7 @@ async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading"
         <div class="kv"><span>Hurdle</span><b>${pct(cp.hurdle_pct)}</b></div>
         <ul class="reasons">${rl(cp.reasons)}</ul></div>
     </div>
+    <div class="muted" style="font-size:11px;margin-top:8px">Accumulation &amp; capital use illustrative, explicable factors — in production these UC functions integrate blended vendor cat-model output and the capital engine. The platform pattern (UC functions called live) is real; the coefficients are demo placeholders.</div>
     ${whatif?`<div style="margin-top:16px">${whatif}</div>`:''}
     <div class="grid g2" style="margin-top:16px">
       <div class="card" id="alt-card"><h3>Portfolio alternative</h3><span class="muted">loading…</span></div>
@@ -234,8 +243,15 @@ async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading"
       ${watch?`<div class="note" style="margin-top:8px">${c.watch_note||''}</div>`:''}`;}).catch(()=>{});
   ["supervisor","challenge","portfolio","counterparty","dataquality"].forEach(async role=>{
     try{const n=await api("/submission/"+encodeURIComponent(sid)+"/narrate?role="+role);
-      $("#narr-"+role).innerHTML=`<span class="tag">${role} · ${n.cache||''}</span>${n.text||''}`;}
+      const tools=(n.tools&&n.tools.length)?`<div style="margin-top:8px">${n.tools.map(t=>`<span class="pill green" style="margin:2px 4px 0 0">🛠 ${t}</span>`).join('')}<div class="muted" style="font-size:10.5px;margin-top:3px">the agent called these UC functions itself</div></div>`:'';
+      $("#narr-"+role).innerHTML=`<span class="tag">${role==='supervisor'?'Supervisor (tool-calling agent)':role} · ${n.cache||''}</span>${n.text||''}${tools}`;}
     catch(e){$("#narr-"+role).innerHTML=`<span class="tag">${role}</span><span class="muted">unavailable</span>`;}});}
+
+let DEC_SID=null;
+async function logDecision(action){if(!DEC_SID)return;const o=$("#dec-out");o.textContent="logging…";
+  try{const r=await api("/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({submission_public_id:DEC_SID,action:action,decided_by:"demo-underwriter"})});
+    o.innerHTML=`<span class="pill green">logged ${r.decision_id} · ${r.action}</span> <span class="muted">written to gov_decision_audit — see Governance ▸ Decision audit</span>`;}
+  catch(e){o.textContent="failed";}}
 
 // ─────────── Cat Event Response (THE WOW) ───────────
 async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loading">Assembling the book-wide event response…</div>';
@@ -291,10 +307,23 @@ async function ai(){const m=$("#main");m.innerHTML='<div class="loading">Loading
   const sup=d.nodes.filter(n=>n.kind==='supervisor'), ag=d.nodes.filter(n=>n.kind==='agent'),
         tools=d.nodes.filter(n=>n.kind==='tool'), genie=d.nodes.filter(n=>n.kind==='genie');
   const sec=(t,ns)=>ns.length?`<div class="eyebrow" style="margin:16px 0 8px">${t}</div><div class="grid g3">${ns.map(card).join("")}</div>`:'';
+  const ask=`<div class="card" style="border-left:3px solid var(--violet)"><h3>Ask the supervisor — a real tool-calling agent</h3>
+    <div class="muted" style="font-size:12.5px">The supervisor is a Mosaic AI agent. It decides which Unity Catalog functions to call, runs them, and reasons over the results. Try: <i>"Should we bind sub:900002?"</i> · <i>"What's our exposure to event evt:900001?"</i> · <i>"Is sub:900001 in appetite?"</i></div>
+    <div style="display:flex;gap:8px;margin-top:10px"><input id="ai-q" placeholder="Ask about a submission or event…" value="Should we bind sub:900002? Give the call." style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px"/>
+      <button class="btn" onclick="askAgent()">Ask</button></div>
+    <div id="ai-a" style="margin-top:12px"></div></div>`;
   m.innerHTML=`<div class="eyebrow">Reinsurance AI</div><h1>One supervisor. Real specialists.</h1>
     <p class="sub">${d.tagline||'Models price → agents reason → experts review → audited.'}</p>
-    ${sec('Supervisor',sup)}${sec('Specialist agents',ag)}${sec('Deterministic tools (UC functions)',tools)}${sec('Ask the portfolio',genie)}
-    <div class="prov">See it in action: the <a class="lnk" href="#sub/sub:900002">portfolio bomb</a> (supervisor + portfolio + counterparty) and the <a class="lnk" href="#event">cat event</a> (Cat-Event agent assembles the book-wide response).</div>`;}
+    ${ask}
+    ${sec('Supervisor — tool-calling agent',sup)}${sec('Specialist narrators',ag)}${sec('Deterministic tools (UC functions the agent calls)',tools)}${sec('Ask the portfolio',genie)}
+    <div class="prov">See it in action: the <a class="lnk" href="#sub/sub:900002">portfolio bomb</a> and the <a class="lnk" href="#event">cat event</a> — in both, the supervisor box is this agent calling the UC functions live.</div>`;}
+async function askAgent(){const q=$("#ai-q").value;const o=$("#ai-a");o.innerHTML='<span class="muted">the agent is calling tools…</span>';
+  // route submission/event ids in the question to custom_inputs so the agent grounds on them
+  const sm=(q.match(/sub:\d+/)||[])[0]||"";const em=(q.match(/evt:\d+/)||[])[0]||"";
+  try{const r=await api("/agent/ask?q="+encodeURIComponent(q)+(sm?"&sid="+sm:"")+(em?"&eid="+em:""));
+    const tools=(r.tools&&r.tools.length)?`<div style="margin-top:10px"><div class="muted" style="font-size:11px">UC functions the agent called:</div>${r.tools.map(t=>`<span class="pill green" style="margin:3px 4px 0 0">🛠 ${t}</span>`).join('')}</div>`:'';
+    o.innerHTML=`<div class="narr"><span class="tag">Supervisor · live tool-calling</span>${r.text||'(no answer)'}</div>${tools}`;}
+  catch(e){o.innerHTML='<span class="muted">agent unavailable</span>';}}
 
 // ─────────── Governance ───────────
 async function governance(){const m=$("#main");m.innerHTML='<div class="loading">Loading governance…</div>';
@@ -302,21 +331,31 @@ async function governance(){const m=$("#main");m.innerHTML='<div class="loading"
   const inv=d.inventory.map(r=>`<tr><td><b>${r.table_name}</b></td><td>${r.fields}</td><td><span class="pill ${r.sensitivity_tier==='Restricted'?'red':r.sensitivity_tier==='Confidential'?'amber':'green'}">${r.sensitivity_tier}</span></td><td>${r.retention}</td><td class="muted">${r.used_for}</td></tr>`).join("");
   const cp=d.counterparties.map(r=>`<tr><td>${r.cedant_name}</td><td>${r.domicile}</td><td><span class="pill green">${r.sanctions_status}</span></td><td><span class="pill ${r.esg_status==='amber'?'amber':'green'}">${r.esg_status}</span></td></tr>`).join("");
   const sv=d.solvency&&d.solvency[0]||{};
-  m.innerHTML=`<div class="eyebrow">Governance</div><h1>What's collected &amp; how decisions are made</h1>
-    <p class="sub">Data inventory with sensitivity tiers, sanctions/ESG counterparty screening, and the submission-to-bind audit trail.</p>
-    <div class="card"><h3>Data inventory</h3><table><thead><tr><th>Table</th><th>Fields</th><th>Sensitivity</th><th>Retention</th><th>Used for</th></tr></thead><tbody>${inv}</tbody></table></div>
+  m.innerHTML=`<div class="eyebrow">Governance — Unity Catalog</div><h1>What's collected, who can see it, how decisions are made</h1>
+    <p class="sub">Real Unity Catalog governance: lineage captured from the pipeline, dynamic column masking, sensitivity tiers, and a live submission-to-bind audit trail.</p>
+    <div class="card"><h3>Data inventory & sensitivity tiers</h3><table><thead><tr><th>Table</th><th>Fields</th><th>Sensitivity</th><th>Retention</th><th>Used for</th></tr></thead><tbody>${inv}</tbody></table></div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card" id="lineage-card"><h3>UC lineage</h3><span class="muted">loading…</span></div>
+      <div class="card" id="mask-card"><h3>Dynamic data masking (UC column mask)</h3><span class="muted">loading…</span></div>
+    </div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card"><h3>Sanctions / ESG screening</h3><table><thead><tr><th>Cedant</th><th>Domicile</th><th>Sanctions</th><th>ESG</th></tr></thead><tbody>${cp}</tbody></table></div>
-      <div class="card"><h3>Capital / Solvency II cross-link</h3><div class="kv"><span>Solvency II ratio</span><b>${pct(sv.solvency_ratio_pct)}</b></div><div class="kv"><span>Diversified BSCR</span><b>${eurm(sv.diversified_bscr_eur)}</b></div><div class="muted" style="margin-top:8px">${sv.note||''}</div></div>
+      <div class="card"><h3>Capital / Solvency II cross-link</h3><div class="kv"><span>Solvency II ratio</span><b>${pct(sv.solvency_ratio_pct)}</b></div><div class="kv"><span>Diversified BSCR</span><b>${eurm(sv.diversified_bscr_eur)}</b></div><div class="muted" style="margin-top:8px">${sv.note||''} <i>(illustrative factor model — integrates the capital engine in production)</i></div></div>
     </div>
-    <div class="card" style="margin-top:16px"><h3>Decision audit — lookup</h3>
-      <input id="auditId" placeholder="sub:900002" value="sub:900002" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-right:8px"/>
-      <button class="btn" onclick="loadAudit()">Show trail</button><div id="auditOut" style="margin-top:12px"></div></div>`;
-  loadAudit();}
-async function loadAudit(){const id=$("#auditId").value;const d=await api("/governance/audit/"+encodeURIComponent(id));
-  const rows=(d.audit||[]).map(r=>`<div class="kv"><span>${r.decision_id} · ${r.recommendation}</span><b>${r.bound==='true'||r.bound===true?'BOUND':'not bound'}</b></div>
-    <div class="muted">triage ${r.triage_decision} · price ${r.technical_verdict} · breaches appetite ${r.breaches_appetite} · capital-destructive ${r.capital_destructive} · ${r.decided_by}</div>`).join("")||'<span class="muted">no audit rows</span>';
-  $("#auditOut").innerHTML=rows;}
+    <div class="card" style="margin-top:16px"><h3>Decision audit — live capture</h3>
+      <div class="muted" style="font-size:12px">Every decision logged on the Work-a-submission page lands here (MERGE into <code>gov_decision_audit</code>). The trail is the artifact.</div>
+      <div id="auditAll" style="margin-top:10px"><span class="muted">loading…</span></div></div>`;
+  api("/governance/lineage").then(l=>{
+    const body=l.edges?`<table><thead><tr><th>Source</th><th>→ Target</th></tr></thead><tbody>${l.edges.slice(0,20).map(e=>`<tr><td class="muted">${e.source_table_name}</td><td><b>${e.target_table_name}</b></td></tr>`).join('')}</tbody></table>`
+      :`<div style="margin:6px 0">${(l.layers||[]).map(e=>`<div class="kv"><span class="muted">${e[0]}</span><b>→ ${e[1]}</b></div>`).join('')}</div><div class="muted" style="font-size:11px">${(l.tables||[]).length} governed UC objects in this schema</div>`;
+    $("#lineage-card").innerHTML=`<h3>UC lineage</h3>${body}<div class="muted" style="font-size:11px;margin-top:6px">${l.source}</div>`;}).catch(()=>{$("#lineage-card").innerHTML='<h3>UC lineage</h3><span class="muted">unavailable</span>';});
+  api("/governance/masking").then(mk=>{
+    const rows=(mk.rows||[]).map(r=>`<tr><td>${r.cedant_name}</td><td>${r.rating}</td><td>${r.one_year_pd_pct}</td><td class="muted">${r.watch_note}</td></tr>`).join('');
+    $("#mask-card").innerHTML=`<h3>Dynamic data masking (UC column mask)</h3><table><thead><tr><th>Cedant</th><th>Rating</th><th>1-yr PD</th><th>Watch note</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="note" style="font-size:11.5px">${mk.note}</div><div class="muted" style="font-size:10.5px;margin-top:4px"><code>${mk.rule}</code></div>`;}).catch(()=>{$("#mask-card").innerHTML='<h3>Dynamic data masking</h3><span class="muted">unavailable</span>';});
+  api("/governance/audit").then(d=>{
+    const rows=(d.audit||[]).map(r=>`<tr><td><b>${r.submission_public_id}</b></td><td><span class="pill ${r.recommendation==='recommend-to-bind'?'green':r.recommendation==='decline'?'red':'amber'}">${r.recommendation}</span></td><td>${r.bound==='true'||r.bound===true?'<span class="pill green">BOUND</span>':'—'}</td><td class="muted">${r.decided_by}</td><td class="muted">${(r.decision_ts||'').slice(0,16)}</td></tr>`).join('')||'<tr><td colspan=5 class="muted">no decisions yet — log one on a submission</td></tr>';
+    $("#auditAll").innerHTML=`<table><thead><tr><th>Submission</th><th>Recommendation</th><th>Bound</th><th>By</th><th>When</th></tr></thead><tbody>${rows}</tbody></table>`;}).catch(()=>{});}
 
 // ─────────── Learn ───────────
 // ─────────── Learn — Reinsurance 101 (slide deck) ───────────

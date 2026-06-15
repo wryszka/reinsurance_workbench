@@ -29,6 +29,45 @@ def _write(key: str, endpoint: str, response: str):
                   VALUES ('{key}', '{sql.esc(endpoint)}', '{r}', current_timestamp())""")
 
 
+def ask_agent(question: str, custom_inputs: dict = None, use_cache: bool = None) -> dict:
+    """Call the REAL tool-calling supervisor agent (ChatAgent). It autonomously calls the UC-function tools.
+    Returns the grounded answer + the list of tools it actually called (proof of real tool use)."""
+    if use_cache is None:
+        use_cache = config.USE_CACHE
+    endpoint = config.resolve_endpoint(config.EP_AGENT_SUBSTR)
+    payload = {"messages": [{"role": "user", "content": question}], "custom_inputs": custom_inputs or {}}
+    key = _key(endpoint, payload)
+    if use_cache:
+        try:
+            _ensure_cache()
+            hit = _read(key)
+            if hit is not None:
+                d = json.loads(hit)
+                return {"text": d.get("text", ""), "tools": d.get("tools", []), "cache": "hit", "endpoint": endpoint}
+        except Exception:
+            pass
+    try:
+        import requests
+        w = config.get_workspace_client()
+        # ChatAgent endpoints accept the chat schema directly on the data-plane invocations path.
+        host = config.workspace_host(); hdr = w.config._header_factory()
+        r = requests.post(f"{host}/serving-endpoints/{endpoint}/invocations",
+                          headers={**hdr, "Content-Type": "application/json"}, json=payload, timeout=120)
+        r.raise_for_status()
+        out = r.json()
+        msgs = out.get("messages") or []
+        text = msgs[-1].get("content", "") if msgs else (out.get("content") or "")
+        tools = [t.get("tool") for t in (out.get("custom_outputs") or {}).get("trace", [])]
+    except Exception as e:
+        return {"text": f"[agent unavailable: {str(e)[:160]}]", "tools": [], "cache": "error", "endpoint": endpoint}
+    if use_cache:
+        try:
+            _write(key, endpoint, json.dumps({"text": text, "tools": tools}))
+        except Exception:
+            pass
+    return {"text": text, "tools": tools, "cache": ("miss" if use_cache else "bypass"), "endpoint": endpoint}
+
+
 def narrate(role_substr: str, question: str, data: dict, use_cache: bool = None) -> dict:
     """Call a narrate-only agent endpoint with structured data the caller already computed."""
     if use_cache is None:

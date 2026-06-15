@@ -54,7 +54,18 @@ feat["triage_label"] = feat.apply(triage_label, axis=1)
 feat["triage_y"] = feat["triage_label"].map({c: i for i, c in enumerate(TRIAGE_CLASSES)})
 print(feat["triage_label"].value_counts().to_dict())
 
-X = feat[FEATURES]
+# Real Feature Store usage at train time: build the training set via FeatureLookup so UC records the
+# feature_submission -> training-run lineage. (Serving stays feature-vector — the UC-fn tools pre-fetch the
+# struct and pass it to ai_query — so no online store is required.)
+labels_sdf = spark.createDataFrame(feat[["submission_public_id", "triage_y"]])
+training_set = fe.create_training_set(
+    df=labels_sdf,
+    feature_lookups=[FeatureLookup(table_name=f"{fqn}.feature_submission", lookup_key="submission_public_id")],
+    label="triage_y", exclude_columns=["submission_public_id"])
+tdf = training_set.load_df().toPandas()
+X = tdf[FEATURES]
+y_triage = tdf["triage_y"]
+y_lossratio = tdf["expected_loss_ratio"]
 mlflow.autolog(disable=True)
 
 # COMMAND ----------
@@ -65,7 +76,7 @@ mlflow.autolog(disable=True)
 
 clf = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.08, num_leaves=16,
                          min_child_samples=3, random_state=42)
-clf.fit(X, feat["triage_y"])
+clf.fit(X, y_triage)
 
 class TriageModel(mlflow.pyfunc.PythonModel):
     def __init__(self, model, features, n_classes):
@@ -97,7 +108,7 @@ print("triage champion v", tv)
 
 reg = lgb.LGBMRegressor(n_estimators=200, learning_rate=0.08, num_leaves=16,
                         min_child_samples=3, random_state=42)
-reg.fit(X, feat["expected_loss_ratio"])
+reg.fit(X, y_lossratio)
 
 class LossRatioModel(mlflow.pyfunc.PythonModel):
     def __init__(self, model, features):

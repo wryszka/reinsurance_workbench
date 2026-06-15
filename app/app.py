@@ -4,7 +4,7 @@ Presentation only. Every panel calls a real Databricks object (UC function / gol
 Genie) and renders. No business logic, no scoring, no transformation here. The supervisor narration box calls
 the supervisor endpoint through the USE_CACHE wrapper (narration only); structured panels never parse prose.
 """
-import json, os
+import json, os, uuid
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -75,15 +75,11 @@ def decision(sid: str):
     price = _struct(f"{config.fqn('fn_price_submission')}('{s}')")
     accumulation = _struct(f"{config.fqn('fn_accumulation_impact')}('{s}')")
     capital = _struct(f"{config.fqn('fn_capital_impact')}('{s}')")
-    # recommendation is derived from the structured outputs (not an LLM)
-    if triage.get("decision") == "decline" or price.get("verdict") == "inadequate":
-        rec = "decline"
-    elif accumulation.get("breaches_appetite") or capital.get("capital_destructive") or triage.get("decision") == "refer":
-        rec = "refer"
-    else:
-        rec = "recommend-to-bind"
+    # The bind/refer/decline rule lives in Unity Catalog (fn_recommendation), not in the app.
+    rec_struct = _struct(f"{config.fqn('fn_recommendation')}('{s}')")
     return {"summary": summary, "triage": triage, "price": price,
-            "accumulation": accumulation, "capital": capital, "recommendation": rec}
+            "accumulation": accumulation, "capital": capital,
+            "recommendation": rec_struct.get("recommendation", "refer"), "recommendation_detail": rec_struct}
 
 
 @app.get("/api/submission/{sid}/alternative")
@@ -112,20 +108,57 @@ def whatif(sid: str, limit_eur: float = 30000000, attachment_eur: float = 200000
 
 @app.get("/api/submission/{sid}/narrate")
 def narrate(sid: str, role: str = "supervisor"):
+    # The supervisor box is the REAL tool-calling agent — it calls the UC functions itself.
+    if role == "supervisor":
+        out = agents.ask_agent(f"Should we bind submission {sid}? Give the call with quantified reasons.",
+                               custom_inputs={"submission_public_id": sid})
+        return {"text": out.get("text", ""), "cache": out.get("cache"), "tools": out.get("tools", []),
+                "endpoint": out.get("endpoint")}
     d = decision(sid)
     if role == "portfolio":
         d = {**d, "alternative": alternative(sid)["alternative"]}
     if role == "counterparty":
         d = {**d, "counterparty": counterparty(sid)["counterparty"]}
-    role_substr = {"supervisor": config.EP_SUPERVISOR_SUBSTR, "challenge": config.EP_CHALLENGE_SUBSTR,
-                   "dataquality": config.EP_DATAQUALITY_SUBSTR, "portfolio": config.EP_PORTFOLIO_SUBSTR,
-                   "counterparty": config.EP_COUNTERPARTY_SUBSTR}.get(role, config.EP_SUPERVISOR_SUBSTR)
-    q = {"supervisor": f"Give the orchestrated recommendation for {sid}.",
-         "challenge": f"Argue the other side on {sid}.",
+    role_substr = {"challenge": config.EP_CHALLENGE_SUBSTR, "dataquality": config.EP_DATAQUALITY_SUBSTR,
+                   "portfolio": config.EP_PORTFOLIO_SUBSTR, "counterparty": config.EP_COUNTERPARTY_SUBSTR}.get(role, config.EP_CHALLENGE_SUBSTR)
+    q = {"challenge": f"Argue the other side on {sid}.",
          "dataquality": f"Assess the data quality for {sid}.",
          "portfolio": f"Propose a diversifying alternative to {sid}.",
-         "counterparty": f"Flag counterparty risk on {sid}."}.get(role)
+         "counterparty": f"Flag counterparty risk on {sid}."}.get(role, f"Comment on {sid}.")
     return agents.narrate(role_substr, q, d)
+
+
+# ─────────────────────────── Reinsurance AI — ask the real tool-calling agent ───────────────────────────
+@app.get("/api/agent/ask")
+def agent_ask(q: str, sid: str = "", eid: str = ""):
+    ci = {}
+    if sid: ci["submission_public_id"] = sid
+    if eid: ci["event_public_id"] = eid
+    # interactive ask is always live (bypass cache) so the tool-call trace is real on screen
+    out = agents.ask_agent(q, custom_inputs=ci, use_cache=False)
+    return out
+
+
+# ─────────────────────────── decision write-back (live audit capture) ───────────────────────────
+@app.post("/api/decision")
+def log_decision(payload: dict):
+    sid = sql.esc(payload.get("submission_public_id", ""))
+    action = sql.esc(payload.get("action", "refer"))   # recommend-to-bind | refer | decline
+    who = sql.esc(payload.get("decided_by", "demo-underwriter"))
+    bound = "true" if action == "recommend-to-bind" else "false"
+    d = decision(payload.get("submission_public_id", ""))
+    a, cp = d.get("accumulation", {}), d.get("capital", {})
+    rid = "DEC-" + uuid.uuid4().hex[:8].upper()
+    sql.query(f"""MERGE INTO {config.fqn('gov_decision_audit')} t
+        USING (SELECT '{sid}' sid) s ON t.submission_public_id = s.sid
+        WHEN MATCHED THEN UPDATE SET recommendation='{action}', decided_by='{who}', decision_ts=current_timestamp(), bound={bound}
+        WHEN NOT MATCHED THEN INSERT (decision_id, submission_public_id, triage_decision, technical_verdict,
+            breaches_appetite, breach_amount_eur, capital_destructive, rorac_pct, recommendation, decided_by, decision_ts, bound)
+        VALUES ('{rid}','{sid}','{sql.esc(d.get('triage',{}).get('decision',''))}','{sql.esc(d.get('price',{}).get('verdict',''))}',
+            {str(bool(a.get('breaches_appetite'))).lower()}, {float(a.get('breach_amount_eur') or 0)},
+            {str(bool(cp.get('capital_destructive'))).lower()}, {float(cp.get('rorac_pct') or 0)},
+            '{action}','{who}',current_timestamp(),{bound})""")
+    return {"status": "logged", "decision_id": rid, "action": action}
 
 
 # ─────────────────────────── cat event response (the wow) ───────────────────────────
@@ -173,6 +206,47 @@ def gov_inventory():
 @app.get("/api/governance/audit/{sid}")
 def gov_audit(sid: str):
     return {"audit": sql.query(f"SELECT * FROM {config.fqn('fn_decision_audit')}('{sql.esc(sid)}')")}
+
+
+@app.get("/api/governance/audit")
+def gov_audit_all():
+    return {"audit": sql.query(f"""SELECT decision_id, submission_public_id, recommendation, triage_decision,
+        technical_verdict, breaches_appetite, capital_destructive, decided_by, CAST(decision_ts AS STRING) decision_ts, bound
+        FROM {config.fqn('gov_decision_audit')} ORDER BY decision_ts DESC LIMIT 50""")}
+
+
+# ─────────────────────────── real UC lineage + dynamic masking ───────────────────────────
+@app.get("/api/governance/lineage")
+def gov_lineage():
+    cat, sch = config.CATALOG, config.SCHEMA
+    # Real UC lineage captured automatically from the DLT pipeline (system.access.table_lineage).
+    try:
+        edges = sql.query(f"""SELECT DISTINCT source_table_name, target_table_name
+            FROM system.access.table_lineage
+            WHERE target_table_catalog='{cat}' AND target_table_schema='{sch}'
+              AND source_table_name IS NOT NULL AND target_table_name IS NOT NULL
+            LIMIT 200""")
+        if edges:
+            return {"source": "system.access.table_lineage (real UC lineage)", "edges": edges}
+    except Exception as e:
+        pass
+    # Fallback: real UC objects from information_schema (nodes are real; edges = the DLT medallion DAG).
+    tbls = sql.query(f"""SELECT table_name, table_type, comment FROM {cat}.information_schema.tables
+        WHERE table_schema='{sch}' ORDER BY table_name""")
+    return {"source": "information_schema.tables (real UC objects; edges = DLT medallion layers)",
+            "tables": tbls,
+            "layers": [["landing_*", "bronze_* (DLT)"], ["bronze_*", "silver_* (DLT)"],
+                       ["silver_*", "gold_* (DLT)"], ["gold_*", "UC functions + serving"]]}
+
+
+@app.get("/api/governance/masking")
+def gov_masking():
+    # the governed view applies a real UC column mask (is_account_group_member). The app SP isn't in the
+    # privileged group, so it sees the redacted values — proving the mask is enforced by UC, not the app.
+    rows = sql.query(f"SELECT cedant_name, rating, one_year_pd_pct, watch_note FROM {config.fqn('gov_counterparty_secure')} ORDER BY cedant_id LIMIT 8")
+    return {"rows": rows,
+            "rule": "fn mask_sensitive(v) → is_account_group_member('bricksurance_re_secret_readers') ? v : '*** restricted ***'",
+            "note": "Enforced by Unity Catalog on the governed view gov_counterparty_secure. This app's service principal is outside the privileged group, so PD and watch notes are redacted here — by UC, not by the app."}
 
 
 # ─────────────────────────── agents roster ───────────────────────────

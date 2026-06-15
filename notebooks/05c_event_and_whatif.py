@@ -149,6 +149,58 @@ print("fn_portfolio_alternative created")
 
 # COMMAND ----------
 
+# MAGIC %md ## fn_recommendation — the bind/refer/decline call (decision logic lives in UC, not the app)
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE OR REPLACE FUNCTION {fqn}.fn_recommendation(p_submission_public_id STRING)
+RETURNS STRUCT<recommendation STRING, breaches_appetite BOOLEAN, capital_destructive BOOLEAN,
+               rorac_pct DOUBLE, basis ARRAY<STRING>>
+COMMENT 'The orchestrated bind/refer/decline recommendation for a submission, derived deterministically from triage, rate adequacy, marginal accumulation (breach of peak-zone appetite) and marginal capital (RoRAC vs the 15% hurdle). This is the structured decision rule — it lives in Unity Catalog, not in the app. Returns the call, whether appetite is breached, whether the deal is capital-destructive, the RoRAC, and the basis.'
+RETURN
+  SELECT named_struct(
+    'recommendation',
+      CASE WHEN dq < 0.75 OR radq < 0.85 THEN 'decline'
+           WHEN breaches OR (rorac < {HURDLE}) OR refer THEN 'refer'
+           ELSE 'recommend-to-bind' END,
+    'breaches_appetite', breaches, 'capital_destructive', rorac < {HURDLE},
+    'rorac_pct', round(rorac * 100, 1),
+    'basis', array_compact(array(
+      CASE WHEN dq < 0.75 OR radq < 0.85 THEN 'Data quality / rate inadequate' END,
+      CASE WHEN breaches THEN concat('Breaches ', zone_name, ' appetite') END,
+      CASE WHEN rorac < {HURDLE} THEN concat('Capital-destructive (RoRAC ', format_number(rorac*100,1), '%)') END,
+      CASE WHEN refer AND NOT breaches THEN 'Peak-zone cat / weak counterparty — needs review' END,
+      CASE WHEN NOT (dq<0.75 OR radq<0.85 OR breaches OR rorac<{HURDLE} OR refer) THEN 'In appetite, adequately rated, capital-accretive' END))
+  )
+  FROM (
+    SELECT zone_name, dq, radq, ncorr, is_peak, icx, cur, app, util, credit_step,
+           (cur + marg) > app AND is_peak AND icx = 1 AS breaches,
+           (is_peak AND icx = 1) OR credit_step >= 4 OR (app > 0 AND util >= 90) AS refer,
+           CASE WHEN marg_scr > 0 THEN exp_return / marg_scr ELSE 999 END AS rorac
+    FROM (
+      SELECT zone_name, dq, radq, ncorr, is_peak, icx, cur, app, credit_step,
+             CASE WHEN app > 0 THEN cur / app * 100 ELSE 0 END AS util, marg,
+             (ceded_prem - elr * ceded_prem - exp_ratio * ceded_prem) AS exp_return,
+             CASE WHEN icx = 1 THEN marg * 0.55 * (1 + 0.25 * ncorr) ELSE ceded_prem * 0.30 * 0.85 END AS marg_scr
+      FROM (
+        SELECT any_value(zone_name) zone_name, any_value(data_quality_score) dq, any_value(rate_adequacy) radq,
+               any_value(coalesce(n_correlated,0)) ncorr, any_value(is_peak) is_peak, any_value(is_cat_xol) icx,
+               any_value(coalesce(zone_current_pml_1in200_eur,0)) cur, any_value(coalesce(appetite_pml_1in200_eur,0)) app,
+               any_value(coalesce(credit_quality_step,3)) credit_step,
+               CAST(any_value(CASE WHEN is_peak AND is_cat_xol=1 THEN layer_limit_eur*{XOL_OCCUPANCY}*(1+{XOL_CORR_UPLIFT}) ELSE 0 END) AS DOUBLE) marg,
+               any_value(CASE WHEN is_cat_xol=1 THEN rol_pct*layer_limit_eur ELSE ceded_share_pct*subject_premium_eur END) ceded_prem,
+               any_value(expected_loss_ratio) elr,
+               any_value(CASE WHEN is_cat_xol=1 THEN 0.15 ELSE 0.28 END) exp_ratio
+        FROM {fqn}.silver_submissions WHERE submission_public_id = p_submission_public_id
+      )
+    )
+  )
+""")
+print("fn_recommendation created")
+
+# COMMAND ----------
+
 # MAGIC %md ## Light check
 
 # COMMAND ----------

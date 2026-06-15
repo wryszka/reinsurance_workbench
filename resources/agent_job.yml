@@ -1,0 +1,26 @@
+resources:
+  jobs:
+    reinsurance_06b_agent:
+      name: reinsurance_06b_agent
+      tags:
+        project: reinsurance_workbench
+      tasks:
+        - task_key: supervisor_agent
+          notebook_task:
+            notebook_path: ../notebooks/06b_supervisor_agent.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              fm_endpoint: ${var.fm_endpoint}
+              warehouse_id: ${var.warehouse_id}
+              genie_space_id: ${var.genie_space_id}
+          environment_key: agent
+      environments:
+        - environment_key: agent
+          spec:
+            client: "5"
+            dependencies:
+              - databricks-agents
+              - mlflow
+              - databricks-sdk
+              - requests

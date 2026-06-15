@@ -106,6 +106,34 @@ print("sanctions/ESG checks written")
 
 # COMMAND ----------
 
+# MAGIC %md ## Real UC dynamic data masking — a governed view with a column mask
+
+# COMMAND ----------
+
+# Real Unity Catalog column-masking: sensitive counterparty fields are visible only to a privileged group;
+# everyone else sees a redaction. Demonstrated on a governed VIEW (the base table stays readable for the
+# decision engine + agents). This is standard UC governance — is_account_group_member drives the mask.
+spark.sql(f"""
+CREATE OR REPLACE FUNCTION {fqn}.mask_sensitive(v STRING)
+RETURNS STRING
+COMMENT 'UC column-mask helper: returns the value to members of bricksurance_re_secret_readers, else a redaction.'
+RETURN CASE WHEN is_account_group_member('bricksurance_re_secret_readers') THEN v ELSE '*** restricted ***' END
+""")
+spark.sql(f"""
+CREATE OR REPLACE VIEW {fqn}.gov_counterparty_secure AS
+SELECT cedant_id, cedant_name, rating, credit_quality_step, regulatory_watch,
+       {fqn}.mask_sensitive(CAST(round(one_year_pd_pct,3) AS STRING)) AS one_year_pd_pct,
+       {fqn}.mask_sensitive(watch_note) AS watch_note
+FROM {fqn}.counterparties
+""")
+print("UC masking function + governed view created")
+
+# COMMAND ----------
+
+# MAGIC %md ## Capital / Solvency II 1-in-200 cross-link (view over the gold capital mart)
+
+# COMMAND ----------
+
 spark.sql(f"""
 CREATE OR REPLACE VIEW {fqn}.gov_solvency_crosslink AS
 SELECT zone_id, zone_name, current_pml_1in200_eur AS pml_1in200_eur, standalone_scr_eur,
