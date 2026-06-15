@@ -19,6 +19,9 @@ FM_ENDPOINT = os.getenv("FM_ENDPOINT", "databricks-claude-sonnet-4-6")
 EP_SUPERVISOR_SUBSTR = os.getenv("EP_SUPERVISOR_SUBSTR", "reinsurance-supervisor")
 EP_CHALLENGE_SUBSTR = os.getenv("EP_CHALLENGE_SUBSTR", "reinsurance-challenge")
 EP_DATAQUALITY_SUBSTR = os.getenv("EP_DATAQUALITY_SUBSTR", "reinsurance-dataquality")
+EP_EVENT_SUBSTR = os.getenv("EP_EVENT_SUBSTR", "reinsurance-event")
+EP_PORTFOLIO_SUBSTR = os.getenv("EP_PORTFOLIO_SUBSTR", "reinsurance-portfolio")
+EP_COUNTERPARTY_SUBSTR = os.getenv("EP_COUNTERPARTY_SUBSTR", "reinsurance-counterparty")
 
 CACHE_TABLE = f"{CATALOG}.{SCHEMA}.cache_agent_responses"
 

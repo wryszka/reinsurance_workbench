@@ -38,17 +38,32 @@ def control_tower():
                         FROM {config.fqn('gold_capital_position')}""")
     cat = sql.query(f"""SELECT zone_id, return_period, blended_pml_eur, vendor_min_pml_eur, vendor_max_pml_eur,
                         divergence_pct FROM {config.fqn('gold_cat_blended')} ORDER BY zone_id, return_period""")
-    return {"zones": pos, "capital": cap[0] if cap else {}, "cat_curves": cat}
+    # most recent event (drives the live-event banner)
+    ev = sql.query_one(f"""SELECT event_public_id, event_name, region, CAST(event_date AS STRING) event_date,
+                           CAST(net_loss_eur AS double) net_loss_eur FROM {config.fqn('gold_event_response')}
+                           ORDER BY event_date DESC LIMIT 1""")
+    renewal = sql.query_one(f"""SELECT CAST(max(renewal_date) AS STRING) renewal_date,
+                               sum(CASE WHEN status='new' THEN 1 ELSE 0 END) open_new,
+                               count(*) total FROM {config.fqn('silver_submissions')}""") or {}
+    return {"zones": pos, "capital": cap[0] if cap else {}, "cat_curves": cat,
+            "live_event": ev, "renewal": renewal}
 
 
-# ─────────────────────────── underwriter queue ───────────────────────────
+# ─────────────────────────── renewal desk (the daily flood) ───────────────────────────
 @app.get("/api/submissions")
 def submissions():
-    return {"rows": sql.query(f"""
+    rows = sql.query(f"""
         SELECT s.submission_public_id, s.cedant_name, s.broker, s.structure, s.lob, s.zone_name,
                s.proportional_or_xol, s.rol_pct, s.rating, s.data_quality_score, s.inbound_channel,
-               s.is_cat_xol, s.is_peak
-        FROM {config.fqn('silver_submissions')} s ORDER BY s.submission_public_id""")}
+               s.is_cat_xol, s.is_peak, s.status, CAST(s.received_date AS STRING) received_date,
+               CAST(s.renewal_date AS STRING) renewal_date
+        FROM {config.fqn('silver_submissions')} s ORDER BY s.received_date DESC, s.submission_public_id""")
+    # renewal-season banner counts (received in the last 7 days, still 'new')
+    stats = sql.query_one(f"""SELECT
+        count(*) total, sum(CASE WHEN status='new' THEN 1 ELSE 0 END) open_new,
+        sum(CASE WHEN received_date >= date_sub(current_date(), 7) THEN 1 ELSE 0 END) this_week,
+        max(renewal_date) renewal_date FROM {config.fqn('silver_submissions')}""") or {}
+    return {"rows": rows, "stats": stats}
 
 
 # ─────────────────────────── hero decision view (structured = real UC fns) ───────────────────────────
@@ -71,16 +86,70 @@ def decision(sid: str):
             "accumulation": accumulation, "capital": capital, "recommendation": rec}
 
 
+@app.get("/api/submission/{sid}/alternative")
+def alternative(sid: str):
+    return {"alternative": _struct(f"{config.fqn('fn_portfolio_alternative')}('{sql.esc(sid)}')")}
+
+
+@app.get("/api/submission/{sid}/counterparty")
+def counterparty(sid: str):
+    s = sql.esc(sid)
+    return {"counterparty": sql.query_one(f"""
+        SELECT c.cedant_name, c.rating, c.credit_quality_step, c.one_year_pd_pct, c.outlook,
+               c.regulatory_watch, c.watch_note
+        FROM {config.fqn('silver_submissions')} s
+        JOIN {config.fqn('counterparties')} c ON s.cedant_id = c.cedant_id
+        WHERE s.submission_public_id = '{s}' LIMIT 1""")}
+
+
+@app.get("/api/submission/{sid}/whatif")
+def whatif(sid: str, limit_eur: float = 30000000, attachment_eur: float = 20000000):
+    s = sql.esc(sid)
+    zone = sql.query_one(f"SELECT zone_id FROM {config.fqn('silver_submissions')} WHERE submission_public_id = '{s}' LIMIT 1")
+    zid = zone["zone_id"] if zone else "EU_WIND"
+    return _struct(f"{config.fqn('fn_accumulation_whatif')}('{sql.esc(zid)}', {float(limit_eur)}, {float(attachment_eur)})")
+
+
 @app.get("/api/submission/{sid}/narrate")
 def narrate(sid: str, role: str = "supervisor"):
     d = decision(sid)
+    if role == "portfolio":
+        d = {**d, "alternative": alternative(sid)["alternative"]}
+    if role == "counterparty":
+        d = {**d, "counterparty": counterparty(sid)["counterparty"]}
     role_substr = {"supervisor": config.EP_SUPERVISOR_SUBSTR, "challenge": config.EP_CHALLENGE_SUBSTR,
-                   "dataquality": config.EP_DATAQUALITY_SUBSTR}.get(role, config.EP_SUPERVISOR_SUBSTR)
+                   "dataquality": config.EP_DATAQUALITY_SUBSTR, "portfolio": config.EP_PORTFOLIO_SUBSTR,
+                   "counterparty": config.EP_COUNTERPARTY_SUBSTR}.get(role, config.EP_SUPERVISOR_SUBSTR)
     q = {"supervisor": f"Give the orchestrated recommendation for {sid}.",
          "challenge": f"Argue the other side on {sid}.",
-         "dataquality": f"Assess the data quality for {sid}."}.get(role)
-    out = agents.narrate(role_substr, q, d)
-    return out
+         "dataquality": f"Assess the data quality for {sid}.",
+         "portfolio": f"Propose a diversifying alternative to {sid}.",
+         "counterparty": f"Flag counterparty risk on {sid}."}.get(role)
+    return agents.narrate(role_substr, q, d)
+
+
+# ─────────────────────────── cat event response (the wow) ───────────────────────────
+@app.get("/api/events")
+def events():
+    return {"events": sql.query(f"""SELECT event_public_id, event_name, region, peril, return_period,
+        CAST(industry_loss_eur AS double) industry_loss_eur, CAST(event_date AS STRING) event_date
+        FROM {config.fqn('events')} ORDER BY event_date DESC""")}
+
+
+@app.get("/api/event/{eid}")
+def event_response(eid: str):
+    return _struct(f"{config.fqn('fn_event_response')}('{sql.esc(eid)}')")
+
+
+@app.get("/api/event/{eid}/treaties")
+def event_treaties(eid: str):
+    return {"treaties": sql.query(f"SELECT * FROM {config.fqn('fn_event_treaty_detail')}('{sql.esc(eid)}')")}
+
+
+@app.get("/api/event/{eid}/narrate")
+def event_narrate(eid: str):
+    d = event_response(eid)
+    return agents.narrate(config.EP_EVENT_SUBSTR, f"Brief the CRO on event {eid}.", d)
 
 
 # ─────────────────────────── intake (ADEPT/CDR vs manual + quarantine) ───────────────────────────
@@ -110,17 +179,20 @@ def gov_audit(sid: str):
 @app.get("/api/agents")
 def agent_roster():
     nodes = [
-        {"kind": "supervisor", "name": "Reinsurance AI supervisor", "endpoint": config.resolve_endpoint(config.EP_SUPERVISOR_SUBSTR), "desc": "Synthesises specialists into one recommendation. Narrates only — never binds."},
+        {"kind": "supervisor", "name": "Reinsurance AI supervisor", "endpoint": config.resolve_endpoint(config.EP_SUPERVISOR_SUBSTR), "desc": "Composes the specialists into one recommendation. Narrates only — never binds."},
+        {"kind": "agent", "name": "Cat-Event Response", "endpoint": config.resolve_endpoint(config.EP_EVENT_SUBSTR), "desc": "On a live event, briefs the CRO on book-wide loss, capital hit and the most exposed cedant."},
+        {"kind": "agent", "name": "Portfolio Strategy", "endpoint": config.resolve_endpoint(config.EP_PORTFOLIO_SUBSTR), "desc": "Proposes a diversifying alternative when a deal saturates a peak zone."},
+        {"kind": "agent", "name": "Counterparty Credit", "endpoint": config.resolve_endpoint(config.EP_COUNTERPARTY_SUBSTR), "desc": "Injects the cedant credit + regulatory-watch signal into the decision."},
         {"kind": "agent", "name": "Challenge / Second-Opinion", "endpoint": config.resolve_endpoint(config.EP_CHALLENGE_SUBSTR), "desc": "Argues the other side, quantified."},
         {"kind": "agent", "name": "Data Quality", "endpoint": config.resolve_endpoint(config.EP_DATAQUALITY_SUBSTR), "desc": "Bordereaux / exposure completeness narrative."},
         {"kind": "tool", "name": "fn_triage_submission", "desc": "Appetite decision (model)."},
-        {"kind": "tool", "name": "fn_price_submission", "desc": "Technical price / rate adequacy (model)."},
+        {"kind": "tool", "name": "fn_price_submission", "desc": "Reinsurance pricing — RoL / burning cost / combined ratio (model)."},
         {"kind": "tool", "name": "fn_accumulation_impact", "desc": "THE CRUX — marginal peak-zone PML vs appetite."},
         {"kind": "tool", "name": "fn_capital_impact", "desc": "THE CRUX — marginal SCR vs expected return (RoRAC)."},
-        {"kind": "tool", "name": "fn_portfolio_position", "desc": "Peak-zone capacity vs appetite."},
+        {"kind": "tool", "name": "fn_event_response", "desc": "Book-wide cat-event loss + capital impact in seconds."},
         {"kind": "genie", "name": "Ask the Portfolio", "desc": "AI/BI Genie over the gold marts.", "space": config.GENIE_SPACE_ID},
     ]
-    return {"nodes": nodes}
+    return {"nodes": nodes, "tagline": "Models price → agents reason → experts review → every decision audited. Agents escalate; humans bind."}
 
 
 # ─────────────────────────── reset (trigger job by substring) ───────────────────────────

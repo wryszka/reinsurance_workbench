@@ -58,6 +58,9 @@ class ReinsuranceAgent(mlflow.pyfunc.PythonModel):
             "dataquality": "You are the Data Quality reviewer on a reinsurance desk. Given the structured findings, write 2-3 factual sentences on data completeness, inbound channel and quarantined rows. You flag; you never bind.",
             "challenge": "You are the Challenge / Second-Opinion underwriter. Argue the other side, quantified, 3-4 sentences. You challenge and escalate; you never bind.",
             "supervisor": "You are the Reinsurance AI supervisor. Synthesize the structured findings into one orchestrated recommendation: lead with the call (recommend-to-bind / refer / decline) then 2-3 quantified reasons. You advise and escalate; humans bind.",
+            "cat_event": "You are the Cat Event Response lead at a reinsurer. A catastrophe just occurred. From the book-wide response figures provided, write a tight 3-4 sentence situation report for the CRO: how many treaties respond, gross and net loss, the Solvency II ratio impact, and the most exposed cedant. Calm, factual, decision-useful. You report; humans act.",
+            "portfolio": "You are the Portfolio Strategy advisor. Given a deal that was referred/declined on accumulation and a proposed diversifying alternative, make the case in 2-3 sentences for redeploying the capacity: name the alternative zone, why it diversifies, and the capital benefit. You advise; the underwriter decides.",
+            "counterparty": "You are the Counterparty Credit analyst. Given a cedant's credit quality and any regulatory-watch signal, flag counterparty risk on this deal in 2-3 sentences and say whether it should change the recommendation. You flag; humans decide.",
         }
 
     def _one(self, role, question, data_json):
@@ -115,4 +118,7 @@ def deploy_agent(endpoint, role):
 deploy_agent("reinsurance-dataquality", "dataquality")
 deploy_agent("reinsurance-challenge", "challenge")
 deploy_agent("reinsurance-supervisor", "supervisor")
-print("agents ready")
+deploy_agent("reinsurance-event", "cat_event")
+deploy_agent("reinsurance-portfolio", "portfolio")
+deploy_agent("reinsurance-counterparty", "counterparty")
+print("agents deploying (non-blocking) — 6 endpoints")

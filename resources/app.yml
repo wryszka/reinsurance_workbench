@@ -29,3 +29,15 @@ resources:
           serving_endpoint:
             name: reinsurance-dataquality
             permission: CAN_QUERY
+        - name: event_endpoint
+          serving_endpoint:
+            name: reinsurance-event
+            permission: CAN_QUERY
+        - name: portfolio_endpoint
+          serving_endpoint:
+            name: reinsurance-portfolio
+            permission: CAN_QUERY
+        - name: counterparty_endpoint
+          serving_endpoint:
+            name: reinsurance-counterparty
+            permission: CAN_QUERY
