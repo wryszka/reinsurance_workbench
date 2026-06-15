@@ -51,6 +51,8 @@ def ask_agent(question: str, custom_inputs: dict = None, use_cache: bool = None)
         w = config.get_workspace_client()
         # ChatAgent endpoints accept the chat schema directly on the data-plane invocations path.
         host = config.workspace_host(); hdr = w.config._header_factory()
+        if host and not host.startswith("http"):
+            host = "https://" + host
         r = requests.post(f"{host}/serving-endpoints/{endpoint}/invocations",
                           headers={**hdr, "Content-Type": "application/json"}, json=payload, timeout=120)
         r.raise_for_status()
