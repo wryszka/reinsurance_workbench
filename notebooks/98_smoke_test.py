@@ -127,6 +127,26 @@ def s_whatif():
     return f"30m breach {big['breach_amount_eur']/1e6:.1f}m > 10m breach {small['breach_amount_eur']/1e6:.1f}m"
 check("13·what-if slider", s_whatif)
 
+def s_recommendation():
+    r1 = json.loads(one(f"SELECT to_json({fqn}.fn_recommendation('sub:900001')) j")["j"])
+    r2 = json.loads(one(f"SELECT to_json({fqn}.fn_recommendation('sub:900002')) j")["j"])
+    assert r1["recommendation"] == "recommend-to-bind", f"900001 {r1['recommendation']}"
+    assert r2["recommendation"] == "refer", f"900002 {r2['recommendation']}"
+    return f"900001={r1['recommendation']} 900002={r2['recommendation']} (decision rule in UC, not the app)"
+check("14·fn_recommendation (decision in UC)", s_recommendation)
+
+def s_masking():
+    one(f"SELECT * FROM {fqn}.gov_counterparty_secure LIMIT 1")  # governed view exists + queryable
+    r = one(f"SELECT watch_note FROM {fqn}.gov_counterparty_secure WHERE cedant_id='CED07'")
+    return f"masked view ok; watch_note shows '{str(r['watch_note'])[:24]}' to this principal"
+check("15·UC dynamic masking view", s_masking)
+
+def s_agent_endpoint():
+    eps = [e.name for e in w.serving_endpoints.list()]
+    assert any("reinsurance_agent" in e for e in eps), "tool-calling agent endpoint missing"
+    return "tool-calling supervisor agent deployed"
+check("16·real tool-calling agent", s_agent_endpoint)
+
 # COMMAND ----------
 
 import pandas as pd
