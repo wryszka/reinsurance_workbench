@@ -3,6 +3,8 @@
 
 > **What this is.** The complete spec + phased build for the reinsurance demo, modelled on `claims_workbench`, `pricing_workbench`, and `solvency-ii-qrt-demo-pnc-agentic` (all in `~/vibe`). Commit this to the repo root and build from it. Target repo: **`wryszka/reinsurance_workbench`**. Catalog: **variable / workspace-default**. Schema (fixed): **`bricksurance_re`**.
 
+> **REBUILD (2026-06-08) — DAIS-aligned demo narrative.** After review against the claims/pricing/solvency DAIS demos, the demo was reshaped into a hero-led product with a clear daily issue, a visceral wow, and agents that do real work. **Spine:** Control Tower → **Renewal Desk** (the daily 1-Jan flood, speed-vs-blind pain) → **Work a submission** (the crux + a live **what-if slider** + portfolio-alternative + counterparty agents) → **Cat Event Response** (the WOW: a live windstorm → book-wide loss, reinstatement, **Solvency II 181%→141%**, top cedant, in seconds) → Control Tower close. New deterministic engine: `fn_event_response`, `fn_event_treaty_detail`, `fn_accumulation_whatif`, `fn_portfolio_alternative`. New agents: Cat-Event, Portfolio, Counterparty (real signals). See `docs/REINSURANCE_FORUM_DEMO_RUNBOOK.md` for the beat sheet. The crux (§4) and invariant 9 (reinsurance pricing, not GLM) are unchanged and remain the core.
+
 ---
 
 ## 0. How to run this build
