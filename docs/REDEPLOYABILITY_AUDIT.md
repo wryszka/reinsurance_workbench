@@ -31,7 +31,11 @@ variable (`catalog`). Schema is fixed `bricksurance_re`.
 2. `databricks bundle run reinsurance_medallion -t dev`   (DLT)
 3. `databricks bundle run reinsurance_05_ml -t dev`        (features + models + crux; serving deploy ~10 min)
 4. `databricks bundle run reinsurance_06_ai -t dev`        (agent tools + agents + governance)
-5. Grant the **app service principal**: `CAN_USE` warehouse; `CAN_QUERY` the 5 endpoints (handled by app.yml
+4b. **GOTCHA:** app.yml serving-endpoint resource bindings only grant CAN_QUERY if the endpoint exists *and is
+   resolvable* at app-deploy time — endpoints still mid-build (NOT_READY) are skipped, so the app gets
+   "You do not have permission to query the endpoint". Fix: after the agent endpoints are READY, grant CAN_QUERY
+   to the app SP explicitly via `PATCH /api/2.0/permissions/serving-endpoints/{id}` (done for event/portfolio/counterparty).
+5. Grant the **app service principal**: `CAN_USE` warehouse; `CAN_QUERY` the agent + model endpoints (handled by app.yml
    resource bindings); `USE CATALOG` + `USE SCHEMA` + `SELECT` + `EXECUTE` + `MODIFY` + **`CREATE TABLE`** on
    `bricksurance_re` (CREATE TABLE is required so the app can create the narration cache table on first run);
    `CAN_MANAGE_RUN` on `reinsurance_99_reset`.
