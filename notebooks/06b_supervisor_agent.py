@@ -181,6 +181,14 @@ FNS = ["fn_submission_summary", "fn_triage_submission", "fn_price_submission", "
        "fn_capital_impact", "fn_recommendation", "fn_portfolio_alternative", "fn_portfolio_position",
        "fn_event_response", "fn_event_treaty_detail"]
 resources = [DatabricksServingEndpoint(endpoint_name=fm_endpoint), DatabricksSQLWarehouse(warehouse_id=warehouse_id)]
+# The triage/pricing UC functions call ai_query() on these serving endpoints, so the agent's SP needs
+# CAN_QUERY on them too (declaring the function alone is not enough — the nested ai_query is a separate resource).
+for ep in ["reinsurance-triage", "reinsurance-pricing"]:
+    try:
+        nm = next(e.name for e in __import__("databricks.sdk", fromlist=["WorkspaceClient"]).WorkspaceClient().serving_endpoints.list() if ep in e.name)
+        resources.append(DatabricksServingEndpoint(endpoint_name=nm))
+    except Exception as _e:
+        print("skip ep resource", ep, _e)
 resources += [DatabricksFunction(function_name=f"{fqn}.{fn}") for fn in FNS]
 for t in ["silver_submissions", "counterparties", "inforce_accumulation", "gold_portfolio_position",
           "gold_event_response", "event_treaty_losses", "feature_submission", "ref_cedants"]:
