@@ -195,6 +195,76 @@ def intake():
     return {"channels": channels, "quarantine": quarantine}
 
 
+# ─────────────────────────── ingestion (feed map + DQ scorecard + Document AI + geo) ───────────────────────────
+_FEEDS = [
+    ("Broker submissions (MRC slip)", "document", "ADEPT/CDR + manual", "bronze_mrc_submissions"),
+    ("Premium bordereaux", "structured", "Cedant feed", "bronze_premium_bordereaux"),
+    ("Loss bordereaux (files)", "file · schema-drift", "Cedant systems (CSV)", "bronze_bordereau_files"),
+    ("Cedant exposure (geospatial)", "geospatial", "Cedant exposure", "bronze_exposure"),
+    ("Cat vendor EP curves", "vendor", "3 cat-model vendors", "cat_vendor_curves"),
+    ("Cat-event footprint", "streaming · JSON", "Vendor footprint feed", "bronze_event_footprint"),
+    ("In-force book", "internal", "Internal book of record", "silver_inforce_treaties"),
+]
+
+
+@app.get("/api/ingestion/feeds")
+def ingestion_feeds():
+    # per-table DQ from the scorecard (avg pass rate); counts per feed table
+    dq = {r["table_name"]: r for r in sql.query(f"""SELECT table_name, round(avg(pass_rate_pct),1) dq_pct,
+          sum(failing_records) failing FROM {config.fqn('gold_dq_scorecard')} GROUP BY table_name""")}
+    feeds = []
+    for name, typ, src, tbl in _FEEDS:
+        try:
+            n = (sql.query_one(f"SELECT count(*) c FROM {config.fqn(tbl)}") or {}).get("c", "0")
+        except Exception:
+            n = "0"
+        d = dq.get(tbl, {})
+        feeds.append({"name": name, "type": typ, "source": src, "table": tbl, "rows": n,
+                      "dq_pct": d.get("dq_pct"), "failing": d.get("failing"),
+                      "status": ("amber" if d.get("dq_pct") is not None and float(d["dq_pct"]) < 98 else "green")})
+    return {"feeds": feeds}
+
+
+@app.get("/api/ingestion/scorecard")
+def ingestion_scorecard():
+    rows = sql.query(f"""SELECT layer, table_name, expectation, predicate, passing_records, failing_records,
+        total_records, pass_rate_pct FROM {config.fqn('gold_dq_scorecard')} ORDER BY layer, table_name, expectation""")
+    kpi = sql.query_one(f"""SELECT round(sum(passing_records)*100.0/greatest(sum(total_records),1),1) overall_pass,
+        count(*) n_expectations, sum(CASE WHEN failing_records>0 THEN 1 ELSE 0 END) failing_checks,
+        sum(failing_records) quarantined FROM {config.fqn('gold_dq_scorecard')}""") or {}
+    return {"rules": rows, "kpi": kpi}
+
+
+@app.get("/api/ingestion/quarantine")
+def ingestion_quarantine():
+    out = {}
+    for label, q in [("loss bordereaux", f"SELECT submission_public_id id, peril detail, quarantine_reason reason FROM {config.fqn('bronze_quarantine_loss')}"),
+                     ("MRC slips", f"SELECT submission_public_id id, structure detail, quarantine_reason reason FROM {config.fqn('bronze_quarantine_mrc')}"),
+                     ("bordereaux files", f"SELECT submission_public_id id, _rescued_data detail, quarantine_reason reason FROM {config.fqn('bronze_quarantine_bordereaux')}")]:
+        try:
+            out[label] = sql.query(q)
+        except Exception:
+            out[label] = []
+    return {"quarantine": out}
+
+
+@app.get("/api/ingestion/document")
+def ingestion_document():
+    rows = sql.query(f"""SELECT submission_public_id, cedant, structure, perils, territories,
+        CAST(layer_limit_eur AS double) layer_limit_eur, CAST(layer_attachment_eur AS double) layer_attachment_eur,
+        CAST(subject_premium_eur AS double) subject_premium_eur, rol_pct, extraction_confidence,
+        substr(slip_excerpt,1,900) slip_excerpt, source_file
+        FROM {config.fqn('landing_mrc_extractions')} ORDER BY extraction_confidence DESC""")
+    return {"extractions": rows}
+
+
+@app.get("/api/ingestion/geo")
+def ingestion_geo():
+    return {"zones": sql.query(f"""SELECT zone_id, cresta, CAST(total_tiv_eur AS double) total_tiv_eur,
+        n_locations, h3_cells, centroid_lat, centroid_lon FROM {config.fqn('gold_exposure_accumulation')}
+        ORDER BY total_tiv_eur DESC""")}
+
+
 # ─────────────────────────── governance ───────────────────────────
 @app.get("/api/governance/inventory")
 def gov_inventory():

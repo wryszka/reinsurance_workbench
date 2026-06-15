@@ -102,3 +102,25 @@ def gold_capital_position():
             .withColumn("solvency_ratio_pct",
                         F.round(F.lit(OWN_FUNDS_EUR) / F.col("diversified_bscr_eur") * 100, 1))
             .withColumn("_gold_built_at", F.current_timestamp()))
+
+# COMMAND ----------
+
+# MAGIC %md ## Geospatial exposure accumulation — H3 binning + CRESTA rollup
+
+# COMMAND ----------
+
+@dlt.table(
+    name="gold_exposure_accumulation",
+    comment="Geospatial exposure rollup: per-location TIV binned to H3 cells (h3_longlatash3, GA) and aggregated "
+            "by CRESTA zone. Shows real geospatial accumulation on the lakehouse.",
+    table_properties={"quality": "gold", "layer": "gold"},
+)
+def gold_exposure_accumulation():
+    loc = spark.read.table(f"{REF}.exposure_locations").withColumn("h3_cell", F.expr("h3_longlatash3(lon, lat, 4)"))
+    return (loc.groupBy("zone_id", "cresta").agg(
+                F.sum("tiv_eur").cast("long").alias("total_tiv_eur"),
+                F.count("*").alias("n_locations"),
+                F.countDistinct("h3_cell").alias("h3_cells"),
+                F.round(F.avg("lat"), 3).alias("centroid_lat"),
+                F.round(F.avg("lon"), 3).alias("centroid_lon"))
+            .withColumn("_gold_built_at", F.current_timestamp()))

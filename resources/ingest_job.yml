@@ -1,0 +1,44 @@
+resources:
+  jobs:
+    reinsurance_01_ingest:
+      name: reinsurance_01_ingest
+      tags:
+        project: reinsurance_workbench
+      tasks:
+        - task_key: landing_files
+          notebook_task:
+            notebook_path: ../notebooks/00b_landing_files.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ingest
+        - task_key: mrc_extraction
+          depends_on:
+            - task_key: landing_files
+          notebook_task:
+            notebook_path: ../notebooks/01b_mrc_extraction.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              fm_endpoint: ${var.fm_endpoint}
+          environment_key: ingest
+        - task_key: medallion
+          depends_on:
+            - task_key: mrc_extraction
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.reinsurance_medallion.id}
+            full_refresh: true
+        - task_key: dq_scorecard
+          depends_on:
+            - task_key: medallion
+          notebook_task:
+            notebook_path: ../notebooks/03b_dq_scorecard.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ingest
+      environments:
+        - environment_key: ingest
+          spec:
+            client: "5"
+            dependencies: []

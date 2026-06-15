@@ -7,12 +7,18 @@ resources:
       catalog: ${var.catalog}
       schema: ${var.schema}
       development: true
+      event_log:
+        catalog: ${var.catalog}
+        schema: ${var.schema}
+        name: medallion_event_log
       configuration:
         source_catalog: ${var.catalog}
         source_schema: ${var.schema}
       libraries:
         - notebook:
             path: ../notebooks/01_bronze_dlt_pipeline.py
+        - notebook:
+            path: ../notebooks/01b_file_ingest.py
         - notebook:
             path: ../notebooks/02_silver_dlt.py
         - notebook:

@@ -73,7 +73,7 @@
   <div class="main" id="main"><div class="loading">Loading…</div></div>
 </div>
 <script>
-const NAV=[["portfolio","Control Tower"],["queue","Renewal Desk"],["event","Cat Event"],
+const NAV=[["portfolio","Control Tower"],["queue","Renewal Desk"],["event","Cat Event"],["intake","Ingestion"],
            ["ai","Reinsurance AI"],["governance","Governance"],["learn","Learn"]];
 let CFG={};
 const $=(s)=>document.querySelector(s);
@@ -289,16 +289,45 @@ async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loadin
       <td>${(x.reinstatement===true||x.reinstatement==='true')?'<span class="pill amber">reinstated</span>':'—'}</td></tr>`).join("");
     $("#ev-treaties").innerHTML=`<table><thead><tr><th>Treaty</th><th>Cedant</th><th>Structure</th><th>Ceded loss</th><th>Reinstatement</th></tr></thead><tbody>${rows}</tbody></table>`;}).catch(()=>{});}
 
-// ─────────── Intake ───────────
-async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loading intake…</div>';
-  const d=await api("/intake");
-  const ch=d.channels.map(c=>`<tr><td>${c.path==='structured'?'<span class="pill green">ADEPT/CDR (structured)</span>':'<span class="pill amber">Manual</span>'}</td><td>${c.completeness_band}</td><td>${c.n}</td></tr>`).join("");
-  const qr=d.quarantine.map(q=>`<tr><td>${q.submission_public_id}</td><td>${q.peril}</td><td><span class="pill red">${q.quarantine_reason}</span></td></tr>`).join("")||'<tr><td colspan=3 class="muted">none</td></tr>';
-  m.innerHTML=`<div class="eyebrow">Connectivity boundary</div><h1>Intake</h1>
-    <p class="sub">Submissions arrive via the ADEPT/CDR (ACORD GRLC-shaped) structured inbound mock, or the messy manual path. DLT quality gates quarantine bad rows.</p>
-    <div class="grid g2"><div class="card"><h3>Inbound channels</h3><table><thead><tr><th>Path</th><th>Completeness</th><th>Submissions</th></tr></thead><tbody>${ch}</tbody></table></div>
-    <div class="card"><h3>Quarantined bordereaux rows</h3><table><thead><tr><th>Submission</th><th>Peril</th><th>Reason</th></tr></thead><tbody>${qr}</tbody></table></div></div>
-    <div class="note">Mock feed only — never a placement network. The MRC-slip / CDR extraction shape is reused, not rebuilt.</div>`;}
+// ─────────── Ingestion (feed map · quality scorecard · Document AI · geo · quarantine) ───────────
+const TYPE_COL={document:'#6d28d9','file · schema-drift':'#d97706',geospatial:'#0891b2','streaming · JSON':'#16a34a',vendor:'#2563eb',structured:'#475569',internal:'#475569'};
+async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loading ingestion…</div>';
+  m.innerHTML=`<div class="eyebrow">Data Ingestion — Unity Catalog + Lakeflow</div><h1>The front door — every feed, every rule</h1>
+    <p class="sub">Structured feeds, vendor cat output, geospatial exposure, a streaming event footprint, and the genuinely hard one — unstructured MRC slips read by Document AI. Every feed is quality-gated; the scorecard is computed from the live DLT event log.</p>
+    <div id="ing-kpi" class="grid g4"></div>
+    <div class="card" style="margin-top:16px"><h3>Source / feed map</h3><div id="ing-feeds"><span class="muted">loading…</span></div></div>
+    <div class="card" style="margin-top:16px"><h3>🧠 Document AI — unstructured MRC slip → structured fields</h3>
+      <div class="muted" style="font-size:12.5px">Reinsurers re-key slips by hand today. Here <code>ai_query</code> (Claude) extracts the fields from the slip text on a UC Volume, with a confidence gate that quarantines weak extractions.</div>
+      <div id="ing-doc" style="margin-top:10px"><span class="muted">loading…</span></div></div>
+    <div class="card" style="margin-top:16px"><h3>Quality scorecard — DLT expectations (live event log)</h3><div id="ing-rules"><span class="muted">loading…</span></div></div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card" id="ing-geo"><h3>Geospatial accumulation (H3 · CRESTA)</h3><span class="muted">loading…</span></div>
+      <div class="card" id="ing-quar"><h3>Quarantine — nothing silently lost</h3><span class="muted">loading…</span></div>
+    </div>`;
+  api("/ingestion/scorecard").then(d=>{const k=d.kpi||{};
+    $("#ing-kpi").innerHTML=[["Overall pass rate",pct(k.overall_pass),k.overall_pass>=98?'#16a34a':'#d97706'],
+      ["Expectations",k.n_expectations,'#0f172a'],["Failing checks",k.failing_checks,k.failing_checks>0?'#d97706':'#16a34a'],
+      ["Quarantined rows",k.quarantined,k.quarantined>0?'#dc2626':'#16a34a']].map(c=>`<div class="card"><h3>${c[0]}</h3><div class="big" style="color:${c[2]}">${c[1]??'—'}</div></div>`).join('');
+    const byLayer={};(d.rules||[]).forEach(r=>{(byLayer[r.layer]=byLayer[r.layer]||[]).push(r);});
+    $("#ing-rules").innerHTML=`<table><thead><tr><th>Layer</th><th>Table</th><th>Expectation</th><th>Rule</th><th>Pass</th><th>Fail</th><th>%</th></tr></thead><tbody>${
+      (d.rules||[]).map(r=>`<tr><td><span class="pill ${r.layer==='bronze'?'amber':r.layer==='silver'?'':'green'}">${r.layer}</span></td><td>${r.table_name}</td><td><b>${r.expectation}</b></td><td class="muted" style="font-size:11px">${r.predicate}</td><td>${r.passing_records}</td><td style="${Number(r.failing_records)>0?'color:#dc2626;font-weight:700':''}">${r.failing_records}</td><td>${pct(r.pass_rate_pct)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">scorecard building…</td></tr>'}</tbody></table>`;
+  }).catch(()=>{$("#ing-rules").innerHTML='<span class="muted">scorecard unavailable</span>';});
+  api("/ingestion/feeds").then(d=>{$("#ing-feeds").innerHTML=`<table><thead><tr><th>Feed</th><th>Type</th><th>Source</th><th>Rows</th><th>DQ%</th><th>Status</th></tr></thead><tbody>${
+    (d.feeds||[]).map(f=>`<tr><td><b>${f.name}</b></td><td><span class="pill" style="background:${(TYPE_COL[f.type]||'#475569')}1a;color:${TYPE_COL[f.type]||'#475569'}">${f.type}</span></td><td class="muted">${f.source}</td><td>${Number(f.rows).toLocaleString('en-GB')}</td><td>${f.dq_pct!=null?pct(f.dq_pct):'—'}</td><td><span class="pill ${f.status}">${f.status==='green'?'clean':'review'}</span></td></tr>`).join('')}</tbody></table>`;}).catch(()=>{});
+  api("/ingestion/document").then(d=>{const ex=d.extractions||[];const top=ex[0],low=ex[ex.length-1];
+    const card=(e,tag)=>e?`<div class="card" style="background:#faf5ff"><div class="eyebrow">${tag} · confidence ${e.extraction_confidence}</div>
+      <div class="grid g2" style="gap:12px"><div><div class="muted" style="font-size:10.5px">RAW SLIP (excerpt)</div><pre style="white-space:pre-wrap;font-size:10.5px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;max-height:200px;overflow:auto">${(e.slip_excerpt||'').replace(/</g,'&lt;')}</pre></div>
+      <div><div class="muted" style="font-size:10.5px">EXTRACTED FIELDS</div>
+        <div class="kv"><span>Submission</span><b>${e.submission_public_id||'—'}</b></div><div class="kv"><span>Cedant</span><b>${e.cedant||'—'}</b></div>
+        <div class="kv"><span>Structure</span><b>${e.structure||'—'}</b></div><div class="kv"><span>Perils</span><b>${e.perils||'—'}</b></div>
+        <div class="kv"><span>Layer</span><b>${e.layer_limit_eur?eurm(e.layer_limit_eur)+' xs '+eurm(e.layer_attachment_eur):'proportional'}</b></div>
+        <div class="kv"><span>RoL</span><b>${e.rol_pct!=null?pct(e.rol_pct*100):'<span class=pill style="background:#fef2f2;color:#dc2626">missing</span>'}</b></div>
+        <div style="margin-top:6px">${Number(e.extraction_confidence)>=0.75?'<span class="pill green">passes gate → bronze</span>':'<span class="pill red">below 0.75 → quarantined</span>'}</div></div></div></div>`:'';
+    $("#ing-doc").innerHTML=`<div class="grid g2">${card(top,'High-confidence extraction')}${card(low,'Low-confidence (gated)')}</div>`;}).catch(()=>{$("#ing-doc").innerHTML='<span class="muted">extractions building…</span>';});
+  api("/ingestion/geo").then(d=>{$("#ing-geo").innerHTML=`<h3>Geospatial accumulation (H3 · CRESTA)</h3><table><thead><tr><th>Zone</th><th>CRESTA</th><th>TIV</th><th>Locations</th><th>H3 cells</th></tr></thead><tbody>${
+    (d.zones||[]).slice(0,8).map(z=>`<tr><td>${z.zone_id}</td><td>${z.cresta}</td><td>${eurm(z.total_tiv_eur)}</td><td>${z.n_locations}</td><td>${z.h3_cells}</td></tr>`).join('')}</tbody></table><div class="muted" style="font-size:11px;margin-top:6px">TIV binned with <code>h3_longlatash3</code> (GA geospatial) and rolled up by CRESTA.</div>`;}).catch(()=>{$("#ing-geo").innerHTML='<h3>Geospatial accumulation</h3><span class="muted">building…</span>';});
+  api("/ingestion/quarantine").then(d=>{const q=d.quarantine||{};const sec=Object.keys(q).map(k=>`<div style="margin-top:6px"><b style="font-size:12px">${k}</b> ${(q[k]||[]).map(r=>`<div class="kv"><span class="muted">${r.id||''} · ${(r.detail||'').toString().slice(0,40)}</span><span class="pill red">${r.reason}</span></div>`).join('')||'<span class="muted"> none</span>'}</div>`).join('');
+    $("#ing-quar").innerHTML=`<h3>Quarantine — nothing silently lost</h3>${sec}`;}).catch(()=>{$("#ing-quar").innerHTML='<h3>Quarantine</h3><span class="muted">building…</span>';});}
 
 // ─────────── Reinsurance AI roster ───────────
 async function ai(){const m=$("#main");m.innerHTML='<div class="loading">Loading agents…</div>';
