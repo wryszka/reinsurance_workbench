@@ -75,8 +75,19 @@ written = 0
 for i, sid in enumerate(ids):
     if sid not in subs:
         continue
-    messy = (sid == "sub:900133")   # the messy slip → low extraction confidence → quarantine
-    open(f"{BASE}/mrc_slips/{sid.replace(':','_')}.md", "w").write(slip(subs[sid], messy))
+    if sid == "sub:900133":
+        # a genuinely degraded slip (poor scan / incomplete submission) — most fields missing/garbled, so
+        # Document-AI extraction confidence falls below the gate → quarantined for re-keying.
+        txt = (f"MARKET REFORM CONTRACT  (scan quality poor)\n"
+               f"Ref: {sid}\n"
+               f"...cedant name illegible...\n"
+               f"cover: excess layer, terms TBC\n"
+               f"limit: [redacted]   xs   [redacted]\n"
+               f"period: 12 months\n"
+               f"-- remainder of slip not captured --\n")
+        open(f"{BASE}/mrc_slips/{sid.replace(':','_')}.md", "w").write(txt)
+    else:
+        open(f"{BASE}/mrc_slips/{sid.replace(':','_')}.md", "w").write(slip(subs[sid], False))
     written += 1
 print(f"wrote {written} MRC slips to {BASE}/mrc_slips/")
 

@@ -40,6 +40,13 @@ submission decision view. ~8 minutes.
      `fn_capital_impact`, `fn_recommendation` etc. itself and the box shows which tools it called. Click **Refer**
      to log the decision → it MERGEs into `gov_decision_audit` (the trail is the artifact).
    - **Reinsurance AI page:** ask the agent live (*"Should we bind sub:900002?"*) and watch the tool-call trace.
+3c. **Ingestion (optional deep-dive for the data crowd).** Open **Ingestion**. The feed/source map shows seven
+   feeds by *type* — structured, vendor cat output, geospatial, a streaming JSON event footprint, and the hard one:
+   **unstructured MRC slips read by Document AI**. The **quality scorecard is computed live from the DLT event
+   log** (15 expectations, ~99% pass, 7 quarantined). The **Document AI panel** shows a raw slip → `ai_query`-
+   extracted fields; the degraded slip (conf 0.0) is **quarantined by the confidence gate**. Schema-drift (a
+   cedant's renamed columns → `_rescued_data`) and H3 geospatial accumulation round it out. "Every feed gated;
+   nothing silently lost; even the PDFs become data."
 4. **THE WOW — Cat Event.** *"Overnight, Windstorm Eckhart made landfall in NW Europe."* Open **Cat Event**. In
    seconds, the book-wide response: **Solvency II 181% → 141%** (gauge), **22 treaties respond**, gross €150m,
    reinstatement income €17m, **net €133m**, most-exposed cedant **Helvetia €50m**, and the responding-treaty table.

@@ -36,7 +36,7 @@ rows = (el.filter("event_type = 'flow_progress'")
 # keep the latest observation per (dataset, expectation)
 w = Window.partitionBy("e.dataset", "e.name").orderBy(F.col("timestamp").desc())
 latest = (rows.withColumn("rn", F.row_number().over(w)).filter("rn = 1")
-          .select(F.col("e.dataset").alias("table_name"), F.col("e.name").alias("expectation"),
+          .select(F.element_at(F.split(F.col("e.dataset"), "\\."), -1).alias("table_name"), F.col("e.name").alias("expectation"),
                   F.col("e.passed_records").alias("passing_records"), F.col("e.failed_records").alias("failing_records")))
 
 @F.udf("string")

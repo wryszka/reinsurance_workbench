@@ -147,6 +147,32 @@ def s_agent_endpoint():
     return "tool-calling supervisor agent deployed"
 check("16·real tool-calling agent", s_agent_endpoint)
 
+def s_docai():
+    n = one(f"SELECT count(*) c FROM {fqn}.landing_mrc_extractions")["c"]
+    assert n >= 4, f"only {n} slips extracted"
+    hero = one(f"SELECT extraction_confidence ec, structure st FROM {fqn}.landing_mrc_extractions WHERE submission_public_id='sub:900002'")
+    assert hero and float(hero["ec"]) >= 0.75, "hero slip extraction weak"
+    return f"{n} slips extracted via ai_query; sub:900002 conf {hero['ec']}, structure {hero['st']}"
+check("17·Document AI extraction", s_docai)
+
+def s_scorecard():
+    n = one(f"SELECT count(*) c FROM {fqn}.gold_dq_scorecard")["c"]
+    assert n >= 8, f"scorecard has only {n} expectations"
+    return f"{n} expectations in the DLT event-log scorecard"
+check("18·DQ scorecard (event log)", s_scorecard)
+
+def s_drift():
+    n = one(f"SELECT count(*) c FROM {fqn}.bronze_quarantine_bordereaux")["c"]
+    assert n >= 1, "no schema-drift rows rescued/quarantined"
+    return f"{n} schema-drifted bordereaux rows rescued into _rescued_data"
+check("19·schema-drift (rescued data)", s_drift)
+
+def s_geo():
+    r = one(f"SELECT sum(h3_cells) h, sum(total_tiv_eur) t FROM {fqn}.gold_exposure_accumulation")
+    assert r and r["h"] and int(r["h"]) > 0, "no H3 cells"
+    return f"{r['h']} H3 cells, TIV {float(r['t'])/1e9:.1f}bn (h3_longlatash3)"
+check("20·geospatial H3 accumulation", s_geo)
+
 # COMMAND ----------
 
 import pandas as pd
