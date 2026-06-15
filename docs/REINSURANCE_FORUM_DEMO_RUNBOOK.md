@@ -16,24 +16,33 @@ submission decision view. ~8 minutes.
 6. Optional managed supervisor: in the Agents UI, create a supervisor over the UC functions + sub-agents; set
    `supervisor_endpoint` var and `EP_SUPERVISOR_SUBSTR`. Without it, the app uses the `reinsurance-supervisor` endpoint.
 
-## The beat sheet
-1. **Open — CRO control tower (Portfolio & Capital).** "Here's the book today." European windstorm is **RED at
-   ~98% of appetite**; CEE flood and US hurricane have headroom. Capital: diversified BSCR, Solvency II ratio.
-   Note the vendor divergence band (we blend 3 vendors that disagree). Drop the consolidation line.
-2. **The clean one — `sub:900001`.** Underwriter queue → open it. Motor quota share, Bricksurance SE, ADEPT/CDR
-   clean. Triage **fast_track**, price adequate, accumulation ~zero (away from peak cat), capital **accretive**
-   (RoRAC above hurdle). Banner: **recommend-to-bind**. "This is the boring, good business."
-3. **The bomb — `sub:900002`.** Open it. *Standalone it looks great:* European property cat XoL €30m xs €20m,
-   reputable cedant (Helvetia, AA-), good RoL, clean-ish loss history. Then the crux fires:
-   - **Accumulation panel RED** — adds ~€29m to European-windstorm 1-in-200 PML, **breaches appetite by ~€17m**,
-     **correlated with 3 in-force treaties** (named).
-   - **Capital panel RED** — marginal SCR ≫ expected return, **RoRAC ~9% vs 15% hurdle — capital-destructive.**
-   - **Supervisor synthesis** narrates the one-line call: **refer / decline** — attractive alone, toxic in aggregate.
-4. **Challenge + governance.** Show the Challenge agent arguing the other side; show the decision audit trail
-   (what was recommended, who decided, bound or not). "Escalate-not-bind — the human decides; the trail is kept."
-5. **Close — back to the control tower.** "Own the boundaries: we never rebuilt the cat engine or the placement
-   network — we quantified, at the desk, what one more treaty does to the portfolio and the capital behind it.
-   One platform instead of five."
+## The beat sheet — control-tower → renewal desk → work-an-item → cat event → close (~8 min)
+1. **Open — CRO Control Tower.** "Here's the book today." European windstorm is **RED at ~98% of appetite**; CEE
+   flood and US hurricane have headroom (capacity remaining shown). Capital: diversified BSCR, Solvency II ratio.
+   Renewal-season banner: **29 open submissions** for the 1-Jan renewal. Note the vendor divergence band (3 vendors
+   that disagree). Drop the consolidation line. → click **Open the renewal desk**.
+2. **Renewal Desk — the daily flood.** Submissions landing for 1-Jan (17 in this week); some via the clean ADEPT/CDR
+   feed, some the messy manual path (quarantined rows). Status chips (new/quoted/bound/declined). The pain line:
+   *"brokers move in hours — each one, priced right AND book-aware?"* Two heroes pinned at the top.
+3a. **The clean one — `sub:900001`.** Motor quota share, Bricksurance SE, ADEPT/CDR. Triage **fast_track**, price
+   **adequate**, accumulation ~zero (capacity bar barely moves), capital **accretive** (RoRAC ~23%). Banner:
+   **recommend-to-bind**. "Quote it and move on — speed wins renewals."
+3b. **The bomb — `sub:900002`.** *Standalone it looks great:* EU property cat XoL €30m xs €20m, Helvetia AA-,
+   adequate price (56% combined). Then the crux fires:
+   - **Accumulation RED** — the **capacity bar overflows past the appetite line**; +€29m PML, **breaches by ~€17m**,
+     **3 correlated in-force treaties light up as red chips** (TR-EUW-101/102/103).
+   - **What-if slider** — drag the limit down: utilisation and breach **re-price live**. At €10m it just fits — "but is €10m worth writing?"
+   - **Capital RED** — marginal SCR ≫ expected return, **RoRAC ~9% vs 15% hurdle — capital-destructive.**
+   - **Portfolio agent** proposes the diversifying alternative (US hurricane, ~19.5% RoRAC); **Counterparty agent**
+     confirms Helvetia is clean *(open any Vistula submission to see it inject the regulatory-watch signal)*;
+     **Supervisor** synthesises the one-line **refer** — attractive alone, toxic in aggregate.
+4. **THE WOW — Cat Event.** *"Overnight, Windstorm Eckhart made landfall in NW Europe."* Open **Cat Event**. In
+   seconds, the book-wide response: **Solvency II 181% → 141%** (gauge), **22 treaties respond**, gross €150m,
+   reinstatement income €17m, **net €133m**, most-exposed cedant **Helvetia €50m**, and the responding-treaty table.
+   The **Cat-Event agent** briefs the CRO. "This is days of manual exposure work — here it's one click."
+5. **Close — back to the Control Tower.** "Own the boundaries: we never rebuilt the cat engine or the placement
+   network — we quantified, at the desk and in the moment, what one more treaty does to the portfolio, and what one
+   storm does to the capital. One platform instead of five."
 
 ## Reset between runs
 Click **↺ Reset demo** (or run `reinsurance_99_reset`). Re-anchors dates to today, full-refreshes the medallion,

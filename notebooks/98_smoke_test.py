@@ -105,11 +105,27 @@ check("10·governance audit", s_audit)
 
 def s_endpoints():
     eps = [e.name for e in w.serving_endpoints.list()]
-    need = ["reinsurance-triage", "reinsurance-pricing", "reinsurance-supervisor"]
+    need = ["reinsurance-triage", "reinsurance-pricing", "reinsurance-supervisor", "reinsurance-event"]
     miss = [n for n in need if not any(n in e for e in eps)]
     assert not miss, f"missing endpoints {miss}"
     return f"{len([e for e in eps if 'reinsurance' in e])} reinsurance endpoints"
 check("11·serving + agents", s_endpoints)
+
+def s_event():
+    e = json.loads(one(f"SELECT to_json({fqn}.fn_event_response('evt:900001')) j")["j"])
+    assert e["n_treaties_responding"] >= 10, f"only {e['n_treaties_responding']} respond"
+    assert e["net_loss_eur"] > 0 and e["gross_loss_eur"] > e["net_loss_eur"], "loss/reinstatement off"
+    assert e["solvency_after_pct"] < e["solvency_before_pct"], "solvency should drop"
+    assert e["solvency_after_pct"] > 100, f"solvency_after {e['solvency_after_pct']} below floor"
+    return f"{e['n_treaties_responding']} respond; net {e['net_loss_eur']/1e6:.0f}m; solvency {e['solvency_before_pct']}->{e['solvency_after_pct']}"
+check("12·CRUX cat-event response", s_event)
+
+def s_whatif():
+    big = json.loads(one(f"SELECT to_json({fqn}.fn_accumulation_whatif('EU_WIND', 30000000.0, 20000000.0)) j")["j"])
+    small = json.loads(one(f"SELECT to_json({fqn}.fn_accumulation_whatif('EU_WIND', 10000000.0, 20000000.0)) j")["j"])
+    assert big["breach_amount_eur"] > small["breach_amount_eur"], "what-if not monotonic in limit"
+    return f"30m breach {big['breach_amount_eur']/1e6:.1f}m > 10m breach {small['breach_amount_eur']/1e6:.1f}m"
+check("13·what-if slider", s_whatif)
 
 # COMMAND ----------
 
