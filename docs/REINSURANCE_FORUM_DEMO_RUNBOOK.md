@@ -5,16 +5,17 @@ submission decision view. ~8 minutes.
 
 ## Pre-flight (once, before the room)
 1. `databricks bundle deploy -t dev -p DEV`
-2. Run jobs in order (or rely on a prior build): `reinsurance_00_setup` → pipeline `reinsurance_medallion` →
-   `reinsurance_05_ml` → `reinsurance_06_ai`.
-3. Deploy the app: `databricks bundle deploy -t dev` includes the app; then `databricks apps deploy reinsurance-workbench`.
-4. **Grant the app SP** (after first app create): `CAN_USE` on the warehouse, `CAN_QUERY` on the 5 reinsurance
-   endpoints, `USE SCHEMA` + `SELECT` + `EXECUTE` on `bricksurance_re`, `CAN_MANAGE_RUN` on `reinsurance_99_reset`.
-   (See REDEPLOYABILITY_AUDIT.md B3.) Set `GENIE_SPACE_ID` in app.yaml once the Genie space exists.
-5. **Pre-warm**: open `sub:900001` then `sub:900002` in the app (warms the supervisor/challenge/dataquality cache),
-   or run `reinsurance_98_smoke_test`.
-6. Optional managed supervisor: in the Agents UI, create a supervisor over the UC functions + sub-agents; set
-   `supervisor_endpoint` var and `EP_SUPERVISOR_SUBSTR`. Without it, the app uses the `reinsurance-supervisor` endpoint.
+2. Run jobs in order: `reinsurance_00_setup` → pipeline `reinsurance_medallion` → `reinsurance_05_ml`
+   (FS→model lineage + crux + event engine + `fn_recommendation`) → `reinsurance_06_ai` (specialist narrators +
+   governance incl. the UC masking view) → **`reinsurance_06b_agent`** (the REAL tool-calling supervisor agent).
+3. Genie: `python3 scripts/create_genie_space.py DEV` → set `GENIE_SPACE_ID` (already wired: `01f168f7…`).
+4. Deploy the app: `databricks bundle deploy -t dev`; then `databricks apps deploy reinsurance-workbench`.
+5. **Grant the app SP**: `CAN_USE` warehouse; `CAN_QUERY` on every reinsurance serving + agent endpoint **including
+   the tool-calling agent** (`agents_…-reinsurance_agent`); `USE CATALOG/SCHEMA`+`SELECT`+`EXECUTE`+`MODIFY`+`CREATE TABLE`
+   on `bricksurance_re`; `CAN_MANAGE_RUN` on `reinsurance_99_reset`. (REDEPLOYABILITY_AUDIT.md B3/4b.)
+6. **Pre-warm**: open `sub:900001`, `sub:900002`, the Cat Event and the AI ask-box, or run `reinsurance_98_smoke_test`.
+   The **supervisor is a real Mosaic AI tool-calling agent** (`reinsurance_agent`) — it calls the UC functions itself;
+   the Reinsurance AI ask-box shows the live tool-call trace. No Agents-UI step needed.
 
 ## The beat sheet — control-tower → renewal desk → work-an-item → cat event → close (~8 min)
 1. **Open — CRO Control Tower.** "Here's the book today." European windstorm is **RED at ~98% of appetite**; CEE
@@ -35,7 +36,10 @@ submission decision view. ~8 minutes.
    - **Capital RED** — marginal SCR ≫ expected return, **RoRAC ~9% vs 15% hurdle — capital-destructive.**
    - **Portfolio agent** proposes the diversifying alternative (US hurricane, ~19.5% RoRAC); **Counterparty agent**
      confirms Helvetia is clean *(open any Vistula submission to see it inject the regulatory-watch signal)*;
-     **Supervisor** synthesises the one-line **refer** — attractive alone, toxic in aggregate.
+     the **Supervisor** box is a **real Mosaic AI tool-calling agent** — it calls `fn_accumulation_impact`,
+     `fn_capital_impact`, `fn_recommendation` etc. itself and the box shows which tools it called. Click **Refer**
+     to log the decision → it MERGEs into `gov_decision_audit` (the trail is the artifact).
+   - **Reinsurance AI page:** ask the agent live (*"Should we bind sub:900002?"*) and watch the tool-call trace.
 4. **THE WOW — Cat Event.** *"Overnight, Windstorm Eckhart made landfall in NW Europe."* Open **Cat Event**. In
    seconds, the book-wide response: **Solvency II 181% → 141%** (gauge), **22 treaties respond**, gross €150m,
    reinstatement income €17m, **net €133m**, most-exposed cedant **Helvetia €50m**, and the responding-treaty table.
