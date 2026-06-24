@@ -12,19 +12,34 @@
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
        color:var(--ink);background:var(--bg);font-size:14px}
   .app{display:flex;min-height:100vh}
-  .side{width:248px;background:var(--slate);color:#cbd5e1;flex-shrink:0;display:flex;flex-direction:column;position:fixed;height:100vh}
-  .brand{padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
-  .brand b{color:#fff;font-size:15px;display:block}
-  .brand span{font-size:11px;color:#94a3b8}
-  .nav{flex:1;padding:10px 8px;overflow:auto}
-  .nav a{display:block;padding:9px 12px;border-radius:8px;color:#cbd5e1;text-decoration:none;font-size:13.5px;margin:2px 0;cursor:pointer}
+  .side{width:264px;background:linear-gradient(180deg,#1e293b 0%,#172033 100%);color:#cbd5e1;flex-shrink:0;display:flex;flex-direction:column;position:fixed;height:100vh;border-right:1px solid rgba(255,255,255,.06)}
+  .brand{display:flex;align-items:center;gap:11px;padding:16px 16px;border-bottom:1px solid rgba(255,255,255,.08);text-decoration:none}
+  .brand:hover{background:rgba(255,255,255,.03)}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#60a5fa);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 10px rgba(37,99,235,.4)}
+  .brand .logo svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2}
+  .brand .btxt b{color:#fff;font-size:14.5px;display:block;line-height:1.15;letter-spacing:-.01em}
+  .brand .btxt span{font-size:10.5px;color:#94a3b8}
+  .nav{flex:1;padding:6px 10px;overflow:auto}
+  .nav .sec{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5b6878;padding:15px 10px 5px}
+  .nav .sec:first-child{padding-top:8px}
+  .nav a{display:flex;align-items:center;gap:11px;padding:8.5px 11px;border-radius:9px;color:#cbd5e1;text-decoration:none;font-size:13.5px;margin:1px 0;cursor:pointer;transition:background .12s,color .12s}
+  .nav a svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0;opacity:.8}
   .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
-  .nav a.on{background:var(--blue);color:#fff;font-weight:600}
+  .nav a:hover svg{opacity:1}
+  .nav a.on{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(37,99,235,.35)}
+  .nav a.on svg{opacity:1}
+  .learn{padding:4px 12px 8px}
+  .learn a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:#94a3b8;text-decoration:none;transition:.12s}
+  .learn a:hover{border-color:rgba(16,185,129,.4);color:#6ee7b7;background:rgba(16,185,129,.06)}
+  .learn a.on{background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.45);color:#a7f3d0}
+  .learn a svg{width:17px;height:17px;stroke:#34d399;fill:none;stroke-width:2;flex-shrink:0}
+  .learn b{font-size:12.5px;display:block;line-height:1.2;font-weight:600}
+  .learn .lsub{font-size:10px;color:#64748b}
   .side .foot{padding:12px;border-top:1px solid rgba(255,255,255,.08)}
   .rbtn{width:100%;padding:9px;border-radius:8px;background:rgba(255,255,255,.08);color:#e2e8f0;border:1px solid rgba(255,255,255,.12);cursor:pointer;font-size:13px}
   .rbtn:hover{background:rgba(255,255,255,.16)}
   .disc{font-size:10.5px;color:#64748b;margin-top:10px;line-height:1.4}
-  .main{margin-left:248px;flex:1;padding:28px 34px;max-width:1180px}
+  .main{margin-left:264px;flex:1;padding:28px 34px;max-width:1180px}
   .eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:4px}
   h1{font-size:24px;margin:0 0 4px}
   .sub{color:var(--mut);margin:0 0 22px;font-size:13.5px}
@@ -61,8 +76,12 @@
 <body>
 <div class="app">
   <div class="side">
-    <div class="brand"><b>Bricksurance Re</b><span>Reinsurance Intelligence Workbench</span></div>
+    <a class="brand" href="#portfolio">
+      <span class="logo"><svg viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></span>
+      <span class="btxt"><b>Bricksurance Re</b><span>Reinsurance Workbench</span></span>
+    </a>
     <div class="nav" id="nav"></div>
+    <div class="learn"><a id="learnLink" href="#learn"><svg viewBox="0 0 24 24"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg><span><b>Learn</b><span class="lsub">How reinsurance works</span></span></a></div>
     <div class="foot">
       <button class="rbtn" id="resetBtn">↺ Reset demo</button>
       <div class="disc"><b>About this demo.</b> Bricksurance Re and its cedants (incl. Bricksurance SE) are synthetic.
@@ -73,8 +92,16 @@
   <div class="main" id="main"><div class="loading">Loading…</div></div>
 </div>
 <script>
-const NAV=[["portfolio","Control Tower"],["queue","Renewal Desk"],["event","Cat Event"],["intake","Ingestion"],
-           ["ai","Reinsurance AI"],["governance","Governance"],["learn","Learn"]];
+const ICON={
+  portfolio:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+  queue:'<svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
+  event:'<svg viewBox="0 0 24 24"><path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973"/><path d="m13 12-3 5h4l-3 5"/></svg>',
+  intake:'<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>',
+  ai:'<svg viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>',
+  governance:'<svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>'};
+const NAV=[
+  {sec:"Underwriting",items:[["portfolio","Control Tower"],["queue","Renewal Desk"],["event","Cat Event"]]},
+  {sec:"Platform",items:[["intake","Ingestion"],["ai","Reinsurance AI"],["governance","Governance"]]}];
 let CFG={};
 const $=(s)=>document.querySelector(s);
 const eur=(v)=>v==null?"—":"€"+Math.round(Number(v)).toLocaleString("en-GB");
@@ -82,8 +109,11 @@ const eurm=(v)=>v==null?"—":"€"+(Number(v)/1e6).toLocaleString("en-GB",{maxi
 const pct=(v)=>v==null?"—":Number(v).toLocaleString("en-GB",{minimumFractionDigits:1,maximumFractionDigits:1})+"%";
 async function api(p,opt){const r=await fetch("/api"+p,opt);return r.json();}
 
-function renderNav(){const route=(location.hash||"#portfolio").slice(1).split("/")[0];
-  $("#nav").innerHTML=NAV.map(([k,l])=>`<a class="${k===route?'on':''}" href="#${k}">${l}</a>`).join("");}
+function renderNav(){let route=(location.hash||"#portfolio").slice(1).split("/")[0];
+  if(route==='sub')route='queue';  // a submission detail lives under the Renewal Desk
+  const link=([k,l])=>`<a class="${k===route?'on':''}" href="#${k}">${ICON[k]||''}<span>${l}</span></a>`;
+  $("#nav").innerHTML=NAV.map(s=>`<div class="sec">${s.sec}</div>`+s.items.map(link).join("")).join("");
+  const ll=$("#learnLink");if(ll)ll.classList.toggle("on",route==='learn');}
 
 window.addEventListener("hashchange",route);
 async function boot(){CFG=await api("/config");route();}
