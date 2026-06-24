@@ -942,7 +942,57 @@ const LEARN_PANELS=[
    links:[]},
 ];
 
+const learnTabs=(active)=>`<div class="tabs">
+  <div class="tab ${active==='101'?'on':''}" onclick="location.hash='#learn'">📘 Reinsurance 101</div>
+  <div class="tab ${active==='run'?'on':''}" onclick="location.hash='#learn/run'">▶ How to run the demo</div></div>`;
+
+// ── Demo-run beats (mirrors docs/REINSURANCE_DEMO_BRIEF_AND_RUN.md) ──
+const RUN_STEPS=[
+  ['0','Open — the Overview landing','The app opens on the Overview: the underwriting cycle as seven clickable stages, the honesty box, and the three things the platform makes possible.','One platform — broker slip to bound treaty to the capital it consumes.','#home'],
+  ['1','Control Tower — and the "is this real?" answer','EU windstorm RED at 97.6% of appetite (€488m of €500m); Solvency II ~181%. <b>Click the €488m tile</b> → it is the sum of 23 in-force treaties, the 3 vendor curves it blends, the source tables and the SQL.','Every number drills to the rows it is computed from — live.','#portfolio'],
+  ['2','Renewal Desk — the daily flood','1-Jan submissions via the clean ADEPT/CDR feed and the messy manual path; the quarantined count clicks through to the rows DLT held back.','Brokers move in hours — each one priced right AND book-aware?','#queue'],
+  ['3a','The clean one — sub:900001','Motor quota share, fast-track, adequate price, ~zero accumulation, RoRAC ~23% → RECOMMEND-TO-BIND.','Quote it and move on — speed wins renewals.','#sub/sub:900001'],
+  ['3b','The bomb — sub:900002 (centrepiece)','Looks great standalone (56% combined). Then the crux: +€28.7m PML breaches appetite by €16.7m; RoRAC 8.7% vs 15% hurdle. "Show the UC calls" proves each card is a live function. Supervisor → REFER.','The deal that would have quietly broken the book, caught before bind.','#sub/sub:900002'],
+  ['4','The wow — Cat Event','Windstorm Eckhart: 22 treaties respond, gross €150m / net €133m, Solvency II 181% → 141%. Click the net-loss tile → the 22 treaties that sum to it; click the gauge → the capital build.','Days of manual exposure work — one click, with the working shown.','#event'],
+  ['5','Governance — the second pillar','Four tabs: what we collect (surfaced-by-role + masking), decisions & audit, real MLflow model versions + AI-activity, and the full Deal track of sub:900002.','Full explainability and governance — the regulator-readable view.','#governance'],
+  ['6','(Optional) Ingestion','Every feed by type incl. unstructured MRC slips read by Document AI; the quality scorecard is computed live from the DLT event log.','Every feed gated; nothing silently lost; even the PDFs become data.','#intake'],
+  ['7','Close — back to the Control Tower','We never rebuilt the cat engine or the placement network — we quantified, at the desk and in the moment, what one treaty does to the portfolio and what one storm does to the capital.','Every number traces to its source, and the whole thing is governed. One platform instead of five.','#portfolio'],
+];
+const RUN_STORIES=[
+  ['👔','Underwriter / Head of UW','The deal that would have broken the book','sub:900002 looks great — every instinct says write it. The crux fires: +€28.7m into a 97.6% zone, breach €16.7m, RoRAC 8.7%. Supervisor → REFER.','Caught in seconds, before bind — not at year-end.','#dc2626','#sub/sub:900002'],
+  ['🎓','CRO / board','Prove it','A board member asks "how do you know that’s right?" Click the windstorm tile → the 23 named treaties that sum to €488m, the vendor curves, the source tables and the SQL.','Every headline number drills to the live rows — no spreadsheet, no black box.','#2563eb','#portfolio'],
+  ['🌀','CRO / Cat manager','The 6 a.m. storm','The morning after the windstorm: 22 treaties respond, net €133m, Solvency 181% → 141% — in seconds. Click the net-loss to see the treaties summing to it.','Days of manual exposure work collapsed to one click — working shown.','#ea580c','#event'],
+  ['🛡️','Compliance / Chief Risk','Explain the AI to the regulator','Governance ▸ Deal track sub:900002: arrived → extracted → triaged → priced → breach → destructive → five agents’ reasoning → decision logged, each tagged with its source; the champion model version that scored it; the cedant PD masked by UC even from the app.','Full explainability and governance — out of the box, not bolted on.','#6d28d9','#governance'],
+  ['📊','Pricing actuary / analyst','Ask the book','On Reinsurance AI, ask "what would diversify the windstorm peak zone?" — the supervisor decides which UC functions to call, runs them, and shows the tools it actually invoked. Every agent tile links to where it sits.','A tool-calling agent that runs the real functions and shows its work — not a chatbot guessing.','#0e7490','#ai'],
+  ['🗂️','CDO / data leader','Collect once, surface many ways','Governance ▸ What we collect: the same submission is a raw slip for the underwriter, structured data for pricing, a PML for the CRO, features for the models, a tool for the agents, and natural language via Genie.','One source of truth, surfaced seven ways by role — governed, masked, lineage-tracked.','#15803d','#governance'],
+];
+function learnRun(m){
+  const steps=RUN_STEPS.map(s=>`<div class="card" style="display:flex;gap:14px;align-items:flex-start">
+     <div style="width:34px;height:34px;border-radius:10px;background:#f5f3ff;color:var(--violet);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${s[0]}</div>
+     <div style="flex:1"><div style="font-weight:700;font-size:14px">${s[1]}</div>
+       <p style="font-size:12.5px;color:#475569;line-height:1.55;margin:5px 0 6px">${s[2]}</p>
+       <div class="muted" style="font-size:12px;font-style:italic;color:#6d28d9">“${s[3]}”</div></div>
+     <a class="btn ghost" style="text-decoration:none;align-self:center" href="${s[4]}">open ↗</a></div>`).join('<div style="height:10px"></div>');
+  const stories=RUN_STORIES.map(s=>`<a href="${s[6]}" style="text-decoration:none;color:inherit"><div class="card" style="border-left:4px solid ${s[5]};height:100%">
+     <div style="font-size:22px">${s[0]}</div>
+     <div class="eyebrow" style="color:${s[5]};margin-top:6px">${s[1]}</div>
+     <div style="font-weight:700;font-size:14px;margin:2px 0 6px">${s[2]}</div>
+     <p style="font-size:12.5px;color:#475569;line-height:1.5;margin:0 0 8px">${s[3]}</p>
+     <div style="font-size:12px;font-weight:700;color:${s[5]}">✨ ${s[4]}</div></div></a>`).join('');
+  m.innerHTML=`<div class="eyebrow">Learn</div><h1>How to run the demo</h1>
+    <p class="sub">The ~9-minute run and a set of persona-led user stories — pick the two or three that fit the room. Each step links into the live app.</p>
+    ${present('The presenter’s guide — the end-to-end run, plus short persona stories with the wow line for each. Click any step or story to jump straight there.')}
+    ${learnTabs('run')}
+    <div class="note" style="margin-top:0">Before the room: click <b>↺ Reset demo</b> (bottom-left) once — it re-anchors dates to today, restores defaults, and re-warms the AI cache so the agents answer instantly. The shape: <b>Overview → Control Tower (prove it) → Renewal Desk → work the two deals → the storm → Governance → close.</b></div>
+    <div class="sech">The run · ~9 minutes</div>
+    <div>${steps}</div>
+    <div class="sech" style="margin-top:24px">User stories to wow the audience</div>
+    <div class="grid g3">${stories}</div>
+    <div class="prov" style="margin-top:18px">Numbers are deterministic (seed=42) and reconcile live; cat-model and capital figures are illustrative. The full brief lives in <code>docs/REINSURANCE_DEMO_BRIEF_AND_RUN.md</code>.</div>`;
+  window.scrollTo(0,0);}
+
 function learn(arg){const m=$("#main");const n=LEARN_PANELS.length;
+  if(arg==='run')return learnRun(m);
   let i=parseInt(arg,10); if(isNaN(i))i=0; i=Math.max(0,Math.min(n-1,i));
   const p=LEARN_PANELS[i];
   const toc=`<aside style="position:sticky;top:8px;align-self:start"><div class="card" style="padding:12px">
@@ -962,6 +1012,7 @@ function learn(arg){const m=$("#main");const n=LEARN_PANELS.length;
     ${links}<div style="flex:1"></div>${nav}</div>`;
   m.innerHTML=`<div class="eyebrow">Learn</div><h1>Reinsurance 101</h1><p class="sub">How treaty reinsurance actually works, end to end — as a slide deck. Jump with the list, or step through with Next. Each slide links into the running workbench.</p>
     ${present('A plain-English primer on how treaty reinsurance works end to end, and where Databricks fits — for anyone in the room without the jargon.')}
+    ${learnTabs('101')}
     <div style="display:grid;grid-template-columns:240px 1fr;gap:22px;align-items:start">${toc}<div>${slide}</div></div>`;
   window.scrollTo(0,0);}
 
