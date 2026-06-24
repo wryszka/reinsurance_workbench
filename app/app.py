@@ -20,6 +20,15 @@ def _struct(fn_call: str):
     return json.loads(row["r"]) if row and row.get("r") else {}
 
 
+def _struct_sql(fn_call: str) -> str:
+    return f"SELECT to_json({fn_call}) AS r"
+
+
+def _parse_struct(rows) -> dict:
+    row = rows[0] if rows else None
+    return json.loads(row["r"]) if row and row.get("r") else {}
+
+
 # ─────────────────────────── config ───────────────────────────
 @app.get("/api/config")
 def api_config():
@@ -31,54 +40,63 @@ def api_config():
 # ─────────────────────────── CRO control tower ───────────────────────────
 @app.get("/api/control-tower")
 def control_tower():
-    pos = sql.query(f"""SELECT zone_id, zone_name, peril, region, current_pml_1in200_eur, appetite_pml_1in200_eur,
-                        headroom_eur, utilisation_pct, rag, n_treaties, market_pml_1in100_eur, market_pml_1in200_eur,
-                        market_pml_1in250_eur FROM {config.fqn('gold_portfolio_position')} ORDER BY utilisation_pct DESC""")
-    cap = sql.query(f"""SELECT DISTINCT diversified_bscr_eur, eligible_own_funds_eur, solvency_ratio_pct
-                        FROM {config.fqn('gold_capital_position')}""")
-    cat = sql.query(f"""SELECT zone_id, return_period, blended_pml_eur, vendor_min_pml_eur, vendor_max_pml_eur,
-                        divergence_pct FROM {config.fqn('gold_cat_blended')} ORDER BY zone_id, return_period""")
-    # most recent event (drives the live-event banner)
-    ev = sql.query_one(f"""SELECT event_public_id, event_name, region, CAST(event_date AS STRING) event_date,
-                           CAST(net_loss_eur AS double) net_loss_eur FROM {config.fqn('gold_event_response')}
-                           ORDER BY event_date DESC LIMIT 1""")
-    renewal = sql.query_one(f"""SELECT CAST(max(renewal_date) AS STRING) renewal_date,
-                               sum(CASE WHEN status='new' THEN 1 ELSE 0 END) open_new,
-                               count(*) total FROM {config.fqn('silver_submissions')}""") or {}
-    return {"zones": pos, "capital": cap[0] if cap else {}, "cat_curves": cat,
-            "live_event": ev, "renewal": renewal}
+    r = sql.query_many({
+        "pos": f"""SELECT zone_id, zone_name, peril, region, current_pml_1in200_eur, appetite_pml_1in200_eur,
+                   headroom_eur, utilisation_pct, rag, n_treaties, market_pml_1in100_eur, market_pml_1in200_eur,
+                   market_pml_1in250_eur FROM {config.fqn('gold_portfolio_position')} ORDER BY utilisation_pct DESC""",
+        "cap": f"""SELECT DISTINCT diversified_bscr_eur, eligible_own_funds_eur, solvency_ratio_pct
+                   FROM {config.fqn('gold_capital_position')}""",
+        "cat": f"""SELECT zone_id, return_period, blended_pml_eur, vendor_min_pml_eur, vendor_max_pml_eur,
+                   divergence_pct FROM {config.fqn('gold_cat_blended')} ORDER BY zone_id, return_period""",
+        # most recent event (drives the live-event banner)
+        "ev": f"""SELECT event_public_id, event_name, region, CAST(event_date AS STRING) event_date,
+                  CAST(net_loss_eur AS double) net_loss_eur FROM {config.fqn('gold_event_response')}
+                  ORDER BY event_date DESC LIMIT 1""",
+        "renewal": f"""SELECT CAST(max(renewal_date) AS STRING) renewal_date,
+                       sum(CASE WHEN status='new' THEN 1 ELSE 0 END) open_new,
+                       count(*) total FROM {config.fqn('silver_submissions')}""",
+    })
+    return {"zones": r["pos"], "capital": sql.first(r["cap"]) or {}, "cat_curves": r["cat"],
+            "live_event": sql.first(r["ev"]), "renewal": sql.first(r["renewal"]) or {}}
 
 
 # ─────────────────────────── renewal desk (the daily flood) ───────────────────────────
 @app.get("/api/submissions")
 def submissions():
-    rows = sql.query(f"""
+    r = sql.query_many({
+        "rows": f"""
         SELECT s.submission_public_id, s.cedant_name, s.broker, s.structure, s.lob, s.zone_name,
                s.proportional_or_xol, s.rol_pct, s.rating, s.data_quality_score, s.inbound_channel,
                s.is_cat_xol, s.is_peak, s.status, CAST(s.received_date AS STRING) received_date,
                CAST(s.renewal_date AS STRING) renewal_date
-        FROM {config.fqn('silver_submissions')} s ORDER BY s.received_date DESC, s.submission_public_id""")
-    # renewal-season banner counts (received in the last 7 days, still 'new')
-    stats = sql.query_one(f"""SELECT
+        FROM {config.fqn('silver_submissions')} s ORDER BY s.received_date DESC, s.submission_public_id""",
+        # renewal-season banner counts (received in the last 7 days, still 'new')
+        "stats": f"""SELECT
         count(*) total, sum(CASE WHEN status='new' THEN 1 ELSE 0 END) open_new,
         sum(CASE WHEN received_date >= date_sub(current_date(), 7) THEN 1 ELSE 0 END) this_week,
-        max(renewal_date) renewal_date FROM {config.fqn('silver_submissions')}""") or {}
-    return {"rows": rows, "stats": stats}
+        max(renewal_date) renewal_date FROM {config.fqn('silver_submissions')}""",
+    })
+    return {"rows": r["rows"], "stats": sql.first(r["stats"]) or {}}
 
 
 # ─────────────────────────── hero decision view (structured = real UC fns) ───────────────────────────
 @app.get("/api/submission/{sid}/decision")
 def decision(sid: str):
     s = sql.esc(sid)
-    summary = _struct(f"{config.fqn('fn_submission_summary')}('{s}')")
-    triage = _struct(f"{config.fqn('fn_triage_submission')}('{s}')")
-    price = _struct(f"{config.fqn('fn_price_submission')}('{s}')")
-    accumulation = _struct(f"{config.fqn('fn_accumulation_impact')}('{s}')")
-    capital = _struct(f"{config.fqn('fn_capital_impact')}('{s}')")
     # The bind/refer/decline rule lives in Unity Catalog (fn_recommendation), not in the app.
-    rec_struct = _struct(f"{config.fqn('fn_recommendation')}('{s}')")
-    return {"summary": summary, "triage": triage, "price": price,
-            "accumulation": accumulation, "capital": capital,
+    # All six UC functions are independent → fire them concurrently (was 6 sequential round-trips).
+    r = sql.query_many({
+        "summary": _struct_sql(f"{config.fqn('fn_submission_summary')}('{s}')"),
+        "triage": _struct_sql(f"{config.fqn('fn_triage_submission')}('{s}')"),
+        "price": _struct_sql(f"{config.fqn('fn_price_submission')}('{s}')"),
+        "accumulation": _struct_sql(f"{config.fqn('fn_accumulation_impact')}('{s}')"),
+        "capital": _struct_sql(f"{config.fqn('fn_capital_impact')}('{s}')"),
+        "rec": _struct_sql(f"{config.fqn('fn_recommendation')}('{s}')"),
+    })
+    rec_struct = _parse_struct(r["rec"])
+    return {"summary": _parse_struct(r["summary"]), "triage": _parse_struct(r["triage"]),
+            "price": _parse_struct(r["price"]), "accumulation": _parse_struct(r["accumulation"]),
+            "capital": _parse_struct(r["capital"]),
             "recommendation": rec_struct.get("recommendation", "refer"), "recommendation_detail": rec_struct}
 
 
@@ -188,11 +206,13 @@ def event_narrate(eid: str):
 # ─────────────────────────── intake (ADEPT/CDR vs manual + quarantine) ───────────────────────────
 @app.get("/api/intake")
 def intake():
-    channels = sql.query(f"""SELECT path, completeness_band, count(*) AS n
-                             FROM {config.fqn('bronze_inbound_audit')} GROUP BY path, completeness_band ORDER BY path""")
-    quarantine = sql.query(f"""SELECT submission_public_id, peril, quarantine_reason
-                              FROM {config.fqn('bronze_quarantine_loss')}""")
-    return {"channels": channels, "quarantine": quarantine}
+    r = sql.query_many({
+        "channels": f"""SELECT path, completeness_band, count(*) AS n
+                        FROM {config.fqn('bronze_inbound_audit')} GROUP BY path, completeness_band ORDER BY path""",
+        "quarantine": f"""SELECT submission_public_id, peril, quarantine_reason
+                          FROM {config.fqn('bronze_quarantine_loss')}""",
+    })
+    return {"channels": r["channels"], "quarantine": r["quarantine"]}
 
 
 # ─────────────────────────── ingestion (feed map + DQ scorecard + Document AI + geo) ───────────────────────────
@@ -268,9 +288,12 @@ def ingestion_geo():
 # ─────────────────────────── governance ───────────────────────────
 @app.get("/api/governance/inventory")
 def gov_inventory():
-    return {"inventory": sql.query(f"SELECT * FROM {config.fqn('gov_data_inventory')} ORDER BY sensitivity_tier"),
-            "counterparties": sql.query(f"SELECT * FROM {config.fqn('gov_counterparty_checks')} ORDER BY cedant_id"),
-            "solvency": sql.query(f"SELECT DISTINCT solvency_ratio_pct, diversified_bscr_eur, eligible_own_funds_eur, note FROM {config.fqn('gov_solvency_crosslink')}")}
+    r = sql.query_many({
+        "inventory": f"SELECT * FROM {config.fqn('gov_data_inventory')} ORDER BY sensitivity_tier",
+        "counterparties": f"SELECT * FROM {config.fqn('gov_counterparty_checks')} ORDER BY cedant_id",
+        "solvency": f"SELECT DISTINCT solvency_ratio_pct, diversified_bscr_eur, eligible_own_funds_eur, note FROM {config.fqn('gov_solvency_crosslink')}",
+    })
+    return {"inventory": r["inventory"], "counterparties": r["counterparties"], "solvency": r["solvency"]}
 
 
 @app.get("/api/governance/audit/{sid}")
