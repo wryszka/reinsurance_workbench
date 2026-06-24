@@ -71,6 +71,36 @@
   .prov{background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:12px 15px;font-size:12.5px;color:#3730a3;margin-top:16px}
   a.lnk{color:var(--blue);text-decoration:none}
   .loading{color:var(--mut);padding:20px}
+  /* presenter strip — one line of "what this page shows", on every page */
+  .present{display:flex;gap:10px;align-items:flex-start;background:linear-gradient(90deg,#eef2ff,#faf5ff);border:1px solid #ddd6fe;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#4338ca;margin:0 0 20px;line-height:1.5}
+  .present .ptag{flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10px;color:#6d28d9;background:#fff;border:1px solid #ddd6fe;border-radius:6px;padding:3px 7px;margin-top:1px}
+  /* Reinsurance AI — colourful, larger tiles */
+  .askbox{background:linear-gradient(135deg,#312e81 0%,#6d28d9 55%,#7c3aed 100%);border-radius:16px;padding:22px 24px;color:#fff;margin-bottom:22px;box-shadow:0 10px 30px rgba(109,40,217,.28)}
+  .askbox h2{margin:0 0 5px;font-size:19px;color:#fff;letter-spacing:-.01em}
+  .askbox .sb{font-size:13px;color:#ddd6fe;margin-bottom:14px;line-height:1.5;max-width:760px}
+  .askbox .exs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .askbox .ex{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#ede9fe;padding:6px 12px;border-radius:999px;font-size:12px;cursor:pointer;transition:background .12s}
+  .askbox .ex:hover{background:rgba(255,255,255,.24)}
+  .askbox .row{display:flex;gap:9px}
+  .askbox input{flex:1;padding:12px 14px;border:0;border-radius:9px;font-size:13.5px;color:var(--ink)}
+  .askbox .go{padding:12px 22px;border-radius:9px;background:#fff;color:#6d28d9;border:0;font-weight:700;cursor:pointer;font-size:13.5px}
+  .askbox .go:hover{background:#f5f3ff}
+  .askbox .ans{margin-top:14px;background:rgba(255,255,255,.97);border-radius:11px;padding:14px 16px;color:var(--ink)}
+  .aitiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:10px}
+  .atile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s}
+  .atile:before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
+  .atile:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(15,23,42,.09)}
+  .atile .ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:12px}
+  .atile .role{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+  .atile .nm{font-size:15px;display:block;margin-bottom:5px;font-weight:700;letter-spacing:-.01em}
+  .atile .d{font-size:12.5px;color:var(--mut);line-height:1.5}
+  .atile .ep{margin-top:11px;font-size:10px;color:#94a3b8;font-family:ui-monospace,SFMono-Regular,monospace;word-break:break-all}
+  .atile.k-supervisor:before{background:linear-gradient(90deg,#7c3aed,#a78bfa)}.atile.k-supervisor{border-color:#ddd6fe}.k-supervisor .ic{background:#f3e8ff;color:#7c3aed}.k-supervisor .role{color:#7c3aed}
+  .atile.k-agent:before{background:linear-gradient(90deg,#2563eb,#60a5fa)}.k-agent .ic{background:#dbeafe;color:#2563eb}.k-agent .role{color:#2563eb}
+  .atile.k-tool:before{background:linear-gradient(90deg,#16a34a,#4ade80)}.k-tool .ic{background:#dcfce7;color:#15803d}.k-tool .role{color:#15803d}
+  .atile.k-genie:before{background:linear-gradient(90deg,#ea580c,#fb923c)}.k-genie .ic{background:#ffedd5;color:#ea580c}.k-genie .role{color:#ea580c}
+  .sech{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:22px 0 4px}
+  .sech .cnt{color:#cbd5e1;font-weight:600}
 </style>
 </head>
 <body>
@@ -108,6 +138,8 @@ const eur=(v)=>v==null?"—":"€"+Math.round(Number(v)).toLocaleString("en-GB")
 const eurm=(v)=>v==null?"—":"€"+(Number(v)/1e6).toLocaleString("en-GB",{maximumFractionDigits:1})+"m";
 const pct=(v)=>v==null?"—":Number(v).toLocaleString("en-GB",{minimumFractionDigits:1,maximumFractionDigits:1})+"%";
 async function api(p,opt){const r=await fetch("/api"+p,opt);return r.json();}
+// presenter strip — a one-liner of what the page shows, shown at the top of every page
+const present=(t)=>`<div class="present"><span class="ptag">On this page</span><span>${t}</span></div>`;
 
 function renderNav(){let route=(location.hash||"#portfolio").slice(1).split("/")[0];
   if(route==='sub')route='queue';  // a submission detail lives under the Renewal Desk
@@ -140,6 +172,7 @@ async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">
      <div style="margin-left:auto"><a class="btn" style="text-decoration:none" href="#queue">Open the renewal desk →</a></div></div>`;
   m.innerHTML=`<div class="eyebrow">CRO Control Tower</div><h1>The book at a glance</h1>
     <p class="sub">Peak-zone capacity versus appetite at the 1-in-200, blended across vendor cat output, with the Solvency II capital cross-link.</p>
+    ${present('The CRO book at a glance — peak-zone capacity vs appetite at the 1-in-200, blended across three cat vendors, with the Solvency II capital cross-link. Open and close the demo here.')}
     ${evBanner}${seasonBanner}
     <div class="grid g3" style="margin-top:16px">${zones}</div>
     <div class="grid g3" style="margin-top:16px">
@@ -175,6 +208,7 @@ async function queue(){const m=$("#main");m.innerHTML='<div class="loading">Load
     <td class="muted">${r.received_date}</td></tr>`).join("");
   m.innerHTML=`<div class="eyebrow">Underwriter · renewal desk</div><h1>Submissions on the desk</h1>
     <p class="sub">The 1-Jan renewal flood. Triage fast, price right, stay book-aware — every submission scored live on real UC functions.</p>
+    ${present('The underwriter daily flood — 1-Jan submissions landing via the clean feed and the messy manual path. Two heroes are pinned at the top: a clean fast-track, and the portfolio bomb.')}
     ${banner}${heroes}
     <div style="margin:10px 0">${chip('new','New')}${chip('quoted','Quoted')}${chip('bound','Bound')}${chip('declined','Declined')}${chip('all','All')}</div>
     <div class="card"><table><thead><tr><th>Submission</th><th>Cedant</th><th>Structure</th><th>Zone</th><th>RoL</th><th>Channel</th><th>Status</th><th>Received</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
@@ -215,6 +249,7 @@ async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading"
       <div id="wi-out" style="margin-top:8px"></div></div>`:'';
   m.innerHTML=`<div class="eyebrow">Underwriter · work a submission</div><h1>${sid}</h1>
     <p class="sub">${s.cedant||''} · ${s.broker||''} · ${s.structure||''} ${s.layer&&s.layer!=='proportional'?'('+s.layer+')':''} · ${s.zone||''}</p>
+    ${present('Triage → price → THE CRUX: what binding this deal does to peak-zone PML vs appetite, and whether it earns its capital (RoRAC vs hurdle). The supervisor agent returns the call; a human binds.')}
     <div class="rec ${recCol}">Recommendation: ${d.recommendation.toUpperCase()}
       ${(d.recommendation_detail&&d.recommendation_detail.basis||[]).length?`<div style="font-size:12px;font-weight:400;margin-top:4px;opacity:.9">${(d.recommendation_detail.basis||[]).join(' · ')}</div>`:''}</div>
     <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -301,6 +336,7 @@ async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loadin
   const k=(l,v,c)=>`<div class="card"><h3>${l}</h3><div class="big" ${c?`style="color:${c}"`:''}>${v}</div></div>`;
   m.innerHTML=`<div class="eyebrow">CRO · live cat event</div><h1>${r.event_name}</h1>
     <p class="sub">${r.region} · 1-in-${r.return_period} · industry loss ${eurm(r.industry_loss_eur)}. Days of manual exposure work — here, the book-wide response in seconds.</p>
+    ${present('The wow — a live catastrophe answered in seconds: book-wide gross and net loss, reinstatements, which treaties respond, the most-exposed cedant, and the hit to the Solvency II ratio.')}
     ${gauge}
     <div class="grid g4" style="margin-top:16px">
       ${k('Treaties responding',r.n_treaties_responding)}
@@ -324,6 +360,7 @@ const TYPE_COL={document:'#6d28d9','file · schema-drift':'#d97706',geospatial:'
 async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loading ingestion…</div>';
   m.innerHTML=`<div class="eyebrow">Data Ingestion — Unity Catalog + Lakeflow</div><h1>The front door — every feed, every rule</h1>
     <p class="sub">Structured feeds, vendor cat output, geospatial exposure, a streaming event footprint, and the genuinely hard one — unstructured MRC slips read by Document AI. Every feed is quality-gated; the scorecard is computed from the live DLT event log.</p>
+    ${present('Every feed by type — structured, vendor cat output, geospatial, a streaming event footprint, and unstructured MRC slips read by Document AI. The quality scorecard is computed live from the pipeline event log.')}
     <div id="ing-kpi" class="grid g4"></div>
     <div class="card" style="margin-top:16px"><h3>Source / feed map</h3><div id="ing-feeds"><span class="muted">loading…</span></div></div>
     <div class="card" style="margin-top:16px"><h3>🧠 Document AI — unstructured MRC slip → structured fields</h3>
@@ -360,29 +397,50 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
     $("#ing-quar").innerHTML=`<h3>Quarantine — nothing silently lost</h3>${sec}`;}).catch(()=>{$("#ing-quar").innerHTML='<h3>Quarantine</h3><span class="muted">building…</span>';});}
 
 // ─────────── Reinsurance AI roster ───────────
+const AIGLYPH={supervisor:'🧠',genie:'💬',tool:'⚙️'};
+function aiIcon(n){if(AIGLYPH[n.kind])return AIGLYPH[n.kind];
+  const s=(n.name||'').toLowerCase();
+  if(s.includes('cat-event')||s.includes('event'))return '🌀';
+  if(s.includes('portfolio'))return '📊';
+  if(s.includes('counterparty')||s.includes('credit'))return '🏦';
+  if(s.includes('challenge')||s.includes('second'))return '⚖️';
+  if(s.includes('data quality'))return '✅';
+  return '🤖';}
+const AIROLE={supervisor:'Supervisor',agent:'Specialist agent',tool:'UC function',genie:'AI/BI Genie'};
 async function ai(){const m=$("#main");m.innerHTML='<div class="loading">Loading agents…</div>';
   const d=await api("/agents");
-  const card=(n)=>`<div class="card"><h3>${n.kind}</h3><b>${n.name}</b><div class="muted" style="margin-top:4px">${n.desc}</div>${n.endpoint?`<div class="muted" style="margin-top:6px;font-size:11px">↳ ${n.endpoint}</div>`:''}</div>`;
+  const tile=(n)=>`<div class="atile k-${n.kind}">
+      <div class="ic">${aiIcon(n)}</div>
+      <div class="role">${AIROLE[n.kind]||n.kind}</div>
+      <span class="nm">${n.name}</span>
+      <div class="d">${n.desc}</div>
+      ${n.endpoint?`<div class="ep">↳ ${n.endpoint}</div>`:''}
+      ${n.space?`<div class="ep">↳ space ${n.space}</div>`:''}</div>`;
   const sup=d.nodes.filter(n=>n.kind==='supervisor'), ag=d.nodes.filter(n=>n.kind==='agent'),
         tools=d.nodes.filter(n=>n.kind==='tool'), genie=d.nodes.filter(n=>n.kind==='genie');
-  const sec=(t,ns)=>ns.length?`<div class="eyebrow" style="margin:16px 0 8px">${t}</div><div class="grid g3">${ns.map(card).join("")}</div>`:'';
-  const ask=`<div class="card" style="border-left:3px solid var(--violet)"><h3>Ask the supervisor — a real tool-calling agent</h3>
-    <div class="muted" style="font-size:12.5px">The supervisor is a Mosaic AI agent. It decides which Unity Catalog functions to call, runs them, and reasons over the results. Try: <i>"Should we bind sub:900002?"</i> · <i>"What's our exposure to event evt:900001?"</i> · <i>"Is sub:900001 in appetite?"</i></div>
-    <div style="display:flex;gap:8px;margin-top:10px"><input id="ai-q" placeholder="Ask about a submission or event…" value="Should we bind sub:900002? Give the call." style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px"/>
-      <button class="btn" onclick="askAgent()">Ask</button></div>
-    <div id="ai-a" style="margin-top:12px"></div></div>`;
+  const sec=(t,ns)=>ns.length?`<div class="sech">${t} <span class="cnt">· ${ns.length}</span></div><div class="aitiles">${ns.map(tile).join("")}</div>`:'';
+  const exs=['Should we bind sub:900002? Give the call.','What\'s our exposure to event evt:900001?','Is sub:900001 in appetite?','What would diversify the windstorm peak zone?'];
+  const ask=`<div class="askbox">
+    <h2>Ask the supervisor — a real tool-calling agent</h2>
+    <div class="sb">A Mosaic AI agent (Claude via the Foundation Model API). It decides which Unity Catalog functions to call, runs them, and reasons over the results — the answer shows the tools it actually invoked.</div>
+    <div class="exs">${exs.map(e=>`<span class="ex" onclick="askEx(this)">${e}</span>`).join('')}</div>
+    <div class="row"><input id="ai-q" placeholder="Ask about a submission or event…" value="Should we bind sub:900002? Give the call."/>
+      <button class="go" onclick="askAgent()">Ask →</button></div>
+    <div id="ai-a"></div></div>`;
   m.innerHTML=`<div class="eyebrow">Reinsurance AI</div><h1>One supervisor. Real specialists.</h1>
     <p class="sub">${d.tagline||'Models price → agents reason → experts review → audited.'}</p>
+    ${present('One supervisor, real specialists — a Mosaic AI tool-calling agent that decides which Unity Catalog functions to run and reasons over the results. Ask it live and watch the tool-call trace.')}
     ${ask}
-    ${sec('Supervisor — tool-calling agent',sup)}${sec('Specialist narrators',ag)}${sec('Deterministic tools (UC functions the agent calls)',tools)}${sec('Ask the portfolio',genie)}
+    ${sec('Supervisor — tool-calling agent',sup)}${sec('Specialist agents',ag)}${sec('Deterministic tools the agent calls',tools)}${sec('Conversational analytics',genie)}
     <div class="prov">See it in action: the <a class="lnk" href="#sub/sub:900002">portfolio bomb</a> and the <a class="lnk" href="#event">cat event</a> — in both, the supervisor box is this agent calling the UC functions live.</div>`;}
-async function askAgent(){const q=$("#ai-q").value;const o=$("#ai-a");o.innerHTML='<span class="muted">the agent is calling tools…</span>';
+function askEx(el){$("#ai-q").value=el.textContent;askAgent();}
+async function askAgent(){const q=$("#ai-q").value;const o=$("#ai-a");o.innerHTML='<div class="ans"><span class="muted">the agent is calling tools…</span></div>';
   // route submission/event ids in the question to custom_inputs so the agent grounds on them
   const sm=(q.match(/sub:\d+/)||[])[0]||"";const em=(q.match(/evt:\d+/)||[])[0]||"";
   try{const r=await api("/agent/ask?q="+encodeURIComponent(q)+(sm?"&sid="+sm:"")+(em?"&eid="+em:""));
     const tools=(r.tools&&r.tools.length)?`<div style="margin-top:10px"><div class="muted" style="font-size:11px">UC functions the agent called:</div>${r.tools.map(t=>`<span class="pill green" style="margin:3px 4px 0 0">🛠 ${t}</span>`).join('')}</div>`:'';
-    o.innerHTML=`<div class="narr"><span class="tag">Supervisor · live tool-calling</span>${r.text||'(no answer)'}</div>${tools}`;}
-  catch(e){o.innerHTML='<span class="muted">agent unavailable</span>';}}
+    o.innerHTML=`<div class="ans"><div class="narr" style="margin:0"><span class="tag">Supervisor · live tool-calling</span>${r.text||'(no answer)'}</div>${tools}</div>`;}
+  catch(e){o.innerHTML='<div class="ans"><span class="muted">agent unavailable</span></div>';}}
 
 // ─────────── Governance ───────────
 async function governance(){const m=$("#main");m.innerHTML='<div class="loading">Loading governance…</div>';
@@ -392,6 +450,7 @@ async function governance(){const m=$("#main");m.innerHTML='<div class="loading"
   const sv=d.solvency&&d.solvency[0]||{};
   m.innerHTML=`<div class="eyebrow">Governance — Unity Catalog</div><h1>What's collected, who can see it, how decisions are made</h1>
     <p class="sub">Real Unity Catalog governance: lineage captured from the pipeline, dynamic column masking, sensitivity tiers, and a live submission-to-bind audit trail.</p>
+    ${present('What we collect and how it is protected — data inventory with sensitivity tiers and dynamic masking, counterparty checks, the decision audit trail, and real Unity Catalog lineage.')}
     <div class="card"><h3>Data inventory & sensitivity tiers</h3><table><thead><tr><th>Table</th><th>Fields</th><th>Sensitivity</th><th>Retention</th><th>Used for</th></tr></thead><tbody>${inv}</tbody></table></div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card" id="lineage-card"><h3>UC lineage</h3><span class="muted">loading…</span></div>
@@ -553,12 +612,29 @@ function learn(arg){const m=$("#main");const n=LEARN_PANELS.length;
     ${p.diagram?`<div class="card" style="margin-top:16px;background:linear-gradient(135deg,#faf5ff,#fff)">${p.diagram}</div>`:''}
     ${links}<div style="flex:1"></div>${nav}</div>`;
   m.innerHTML=`<div class="eyebrow">Learn</div><h1>Reinsurance 101</h1><p class="sub">How treaty reinsurance actually works, end to end — as a slide deck. Jump with the list, or step through with Next. Each slide links into the running workbench.</p>
+    ${present('A plain-English primer on how treaty reinsurance works end to end, and where Databricks fits — for anyone in the room without the jargon.')}
     <div style="display:grid;grid-template-columns:240px 1fr;gap:22px;align-items:start">${toc}<div>${slide}</div></div>`;
   window.scrollTo(0,0);}
 
-$("#resetBtn").onclick=async()=>{if(!confirm("Reset the demo (re-anchor dates, re-warm heroes)?"))return;
-  $("#resetBtn").textContent="Resetting…";try{const r=await api("/reset",{method:"POST"});
-  $("#resetBtn").textContent=r.status==='triggered'?"↺ Reset triggered":"↺ Reset demo";}catch(e){$("#resetBtn").textContent="↺ Reset demo";}};
+$("#resetBtn").onclick=async()=>{
+  if(!confirm("Reset the demo? Re-anchor dates to today, restore the default state, clear and re-warm the AI cache. This runs a job and takes a few minutes."))return;
+  const b=$("#resetBtn");b.disabled=true;b.textContent="Resetting…";
+  try{
+    const r=await api("/reset",{method:"POST"});
+    if(r.status!=='triggered'){b.textContent="↺ Reset failed";setTimeout(()=>{b.textContent="↺ Reset demo";b.disabled=false;},4000);return;}
+    const poll=async()=>{
+      let s={};try{s=await api("/reset/status?run_id="+r.run_id);}catch(e){}
+      const lc=(s.life_cycle||'').toUpperCase();
+      if(lc.includes("TERMINATED")||lc.includes("INTERNAL_ERROR")||lc.includes("SKIPPED")){
+        if((s.result||'').toUpperCase().includes("SUCCESS")){
+          b.textContent="Warming AI cache…";
+          try{await api("/warm-cache",{method:"POST"});}catch(e){}
+          b.textContent="✓ Reset complete";if(location.hash==='#portfolio'||location.hash==='')route();
+        }else{b.textContent="↺ Reset failed";}
+        setTimeout(()=>{b.textContent="↺ Reset demo";b.disabled=false;},5000);return;}
+      b.textContent="Resetting… "+(lc?lc.toLowerCase():'running');setTimeout(poll,6000);};
+    setTimeout(poll,6000);
+  }catch(e){b.textContent="↺ Reset demo";b.disabled=false;}};
 boot();
 </script>
 </body>

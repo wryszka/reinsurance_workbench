@@ -376,6 +376,39 @@ def reset():
         return JSONResponse({"error": str(e)[:200]}, status_code=500)
 
 
+@app.get("/api/reset/status")
+def reset_status(run_id: int):
+    try:
+        w = config.get_workspace_client()
+        st = w.jobs.get_run(run_id=run_id).state
+        lc = getattr(st.life_cycle_state, "value", str(st.life_cycle_state)) if st and st.life_cycle_state else None
+        rs = getattr(st.result_state, "value", str(st.result_state)) if st and st.result_state else None
+        return {"life_cycle": lc, "result": rs}
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/warm-cache")
+def warm_cache():
+    """Pre-fill the AI cache with exactly what the demo surfaces (same endpoint + question + custom_inputs
+    the UI calls, so the keys match → cache hits on stage). Run after a reset, once the data is re-anchored."""
+    warmed = []
+    for sid in ["sub:900001", "sub:900002"]:
+        try:
+            r = narrate(sid, role="supervisor")          # the supervisor box on the submission view
+            warmed.append({"item": sid, "cache": r.get("cache"), "tools": len(r.get("tools", []))})
+        except Exception as e:
+            warmed.append({"item": sid, "error": str(e)[:120]})
+    try:
+        ev = sql.query_one(f"SELECT event_public_id FROM {config.fqn('gold_event_response')} ORDER BY event_date DESC LIMIT 1")
+        if ev and ev.get("event_public_id"):
+            r = event_narrate(ev["event_public_id"])     # the Cat-Event briefing
+            warmed.append({"item": ev["event_public_id"], "cache": r.get("cache")})
+    except Exception as e:
+        warmed.append({"item": "event", "error": str(e)[:120]})
+    return {"status": "warmed", "items": warmed}
+
+
 # ─────────────────────────── static SPA ───────────────────────────
 if os.path.isdir(DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(DIST, "assets")), name="assets") if os.path.isdir(os.path.join(DIST, "assets")) else None
