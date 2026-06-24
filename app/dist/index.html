@@ -129,12 +129,48 @@
   .srcbar code,.srcbar b code{font-family:ui-monospace,monospace;background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:#334155}
   .sqltog{color:var(--blue);cursor:pointer;font-weight:600}
   .sqlbox{display:none;margin-top:10px;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:13px 15px;font-family:ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;line-height:1.55}
+  /* landing / overview */
+  .lhero{text-align:center;max-width:780px;margin:6px auto 0}
+  .lhero .eyebrow{display:block}
+  .lhero h1{font-size:38px;line-height:1.08;letter-spacing:-.02em;margin:10px 0 0}
+  .lhero .lead{color:var(--mut);font-size:15px;line-height:1.6;margin:14px auto 0;max-width:680px}
+  .lcta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+  .lcta a{display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:10px;font-size:13.5px;font-weight:700;text-decoration:none;transition:.12s}
+  .lcta .primary{background:var(--blue);color:#fff;box-shadow:0 4px 16px rgba(37,99,235,.32)}
+  .lcta .primary:hover{background:#1d4ed8}
+  .lcta .ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .lcta .ghost:hover{background:#f8fafc}
+  .about{max-width:900px;margin:26px auto 0;background:var(--ambbg);border:1px solid #fde68a;border-radius:14px;padding:16px 20px;font-size:13px;color:#92400e;line-height:1.65}
+  .lsec{margin-top:32px}
+  .lsec .lh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .lsec .lh h2{font-size:16px;margin:0}
+  .lsec .lhsub{font-size:13px;color:var(--mut);line-height:1.55;max-width:820px;margin:0 0 16px}
+  .lstages{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .lstage{display:flex;flex-direction:column;border:1px solid var(--line);border-top:3px solid #2563eb;border-radius:11px;background:#fff;padding:12px;text-decoration:none;transition:.12s}
+  .lstage:hover{box-shadow:0 8px 22px rgba(15,23,42,.1);transform:translateY(-2px)}
+  .lstage .sn{font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em}
+  .lstage .st{font-size:13.5px;font-weight:700;color:var(--ink);margin-top:2px}
+  .lstage .sb{font-size:11px;color:var(--mut);line-height:1.45;margin-top:6px;flex:1}
+  .lstage .so{font-size:11px;font-weight:700;color:var(--blue);margin-top:8px}
+  .lpillars{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .lpillar{border:1px solid var(--line);border-top:3px solid #2563eb;border-radius:14px;background:#fff;padding:18px;text-decoration:none;display:flex;flex-direction:column;transition:.12s}
+  .lpillar:hover{box-shadow:0 8px 22px rgba(15,23,42,.1)}
+  .lpillar .pe{font-size:26px}
+  .lpillar h3{font-size:15px;margin:11px 0 0;color:var(--ink)}
+  .lpillar p{font-size:13px;color:var(--mut);line-height:1.55;margin:6px 0 0;flex:1}
+  .lpillar .po{font-size:13px;font-weight:700;margin-top:10px}
+  .startbanner{display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,#1e293b,#0f172a);border-radius:16px;padding:20px 24px;margin-top:32px;text-decoration:none}
+  .startbanner h3{color:#fff;font-size:18px;margin:4px 0 3px}
+  .startbanner p{color:#cbd5e1;font-size:13px;margin:0;max-width:640px}
+  .startbanner .go{margin-left:auto;background:var(--blue);color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;font-size:13.5px;white-space:nowrap}
+  .lfoot{text-align:center;font-size:11.5px;color:#94a3b8;margin:24px 0 8px;display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
+  .lfoot a{color:#94a3b8;text-decoration:none}.lfoot a:hover{color:var(--blue)}
 </style>
 </head>
 <body>
 <div class="app">
   <div class="side">
-    <a class="brand" href="#portfolio">
+    <a class="brand" href="#home">
       <span class="logo"><svg viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></span>
       <span class="btxt"><b>Bricksurance Re</b><span>Reinsurance Workbench</span></span>
     </a>
@@ -151,6 +187,7 @@
 </div>
 <script>
 const ICON={
+  home:'<svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><path d="M9 21v-6h6v6"/></svg>',
   portfolio:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
   queue:'<svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
   event:'<svg viewBox="0 0 24 24"><path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973"/><path d="m13 12-3 5h4l-3 5"/></svg>',
@@ -169,16 +206,73 @@ async function api(p,opt){const r=await fetch("/api"+p,opt);return r.json();}
 // presenter strip — a one-liner of what the page shows, shown at the top of every page
 const present=(t)=>`<div class="present"><span class="ptag">On this page</span><span>${t}</span></div>`;
 
-function renderNav(){let route=(location.hash||"#portfolio").slice(1).split("/")[0];
+function renderNav(){let route=(location.hash||"#home").slice(1).split("/")[0];
   if(route==='sub')route='queue';  // a submission detail lives under the Renewal Desk
   const link=([k,l])=>`<a class="${k===route?'on':''}" href="#${k}">${ICON[k]||''}<span>${l}</span></a>`;
-  $("#nav").innerHTML=NAV.map(s=>`<div class="sec">${s.sec}</div>`+s.items.map(link).join("")).join("");
+  const overview=`<a class="${route==='home'?'on':''}" href="#home" style="margin-bottom:6px">${ICON.home}<span>Overview</span></a>`;
+  $("#nav").innerHTML=overview+NAV.map(s=>`<div class="sec">${s.sec}</div>`+s.items.map(link).join("")).join("");
   const ll=$("#learnLink");if(ll)ll.classList.toggle("on",route==='learn');}
 
 window.addEventListener("hashchange",route);
 async function boot(){CFG=await api("/config");route();}
-function route(){if(typeof closeModal==="function")closeModal();renderNav();const h=(location.hash||"#portfolio").slice(1);const[r,arg]=h.split("/");
-  ({portfolio:portfolio,queue:queue,event:eventPage,intake:intake,ai:ai,governance:governance,learn:learn,sub:subView}[r]||portfolio)(arg);}
+function route(){if(typeof closeModal==="function")closeModal();renderNav();const h=(location.hash||"#home").slice(1);const[r,arg]=h.split("/");
+  ({home:landing,portfolio:portfolio,queue:queue,event:eventPage,intake:intake,ai:ai,governance:governance,learn:learn,sub:subView}[r]||landing)(arg);}
+
+// ─────────── Landing / Overview (the top-level entry) ───────────
+const L_STAGES=[
+  {n:'1 · The front door',t:'Ingestion',b:'Every feed landed and quality-gated — MRC slips (Document AI), bordereaux, exposure, vendor cat curves, the event footprint.',to:'#intake',c:'#2563eb'},
+  {n:'2 · In or out',t:'Triage',b:'Is the submission in appetite? Fast-track the clean ones; refer the rest. Scored live on a UC function.',to:'#queue',c:'#2563eb'},
+  {n:'3 · The technical rate',t:'Price',b:'Rate-on-line, burning cost and combined ratio — reinsurance pricing, not a GLM. Is the rate adequate?',to:'#sub/sub:900002',c:'#2563eb'},
+  {n:'4 · THE CRUX',t:'Accumulation',b:'What does binding this deal do to peak-zone PML versus appetite? The good-looking deal exposed as toxic in aggregate.',to:'#sub/sub:900002',c:'#6d28d9'},
+  {n:'5 · THE CRUX',t:'Capital',b:'Does it earn its capital? Marginal SCR versus expected return — RoRAC against the hurdle.',to:'#sub/sub:900002',c:'#6d28d9'},
+  {n:'6 · The call',t:'Decide',b:'The AI advises and challenges; a human binds, refers or declines; the decision lands in the audit trail.',to:'#governance',c:'#16a34a'},
+  {n:'7 · When the storm hits',t:'Cat event',b:'A catastrophe lands — book-wide gross/net loss, reinstatements, responding treaties and the solvency hit, in seconds.',to:'#event',c:'#d97706'},
+];
+const L_PILLARS=[
+  {e:'🏛️',t:'One platform — one source of truth',b:'Ingestion, pricing, accumulation, capital, AI and governance all read the same governed Delta tables. One platform instead of five — no copies, no spreadsheet handoffs.',to:'#portfolio',c:'#2563eb'},
+  {e:'🛡️',t:'Governance &amp; control',b:'Real Unity Catalog lineage, dynamic column masking, sensitivity tiers, and every submission-to-bind decision audited. The enabler of trust.',to:'#governance',c:'#6d28d9'},
+  {e:'🤖',t:'AI agents that assist',b:'A supervisor and a bench of specialists that call the Unity Catalog functions themselves, reason over the results and brief the desk — helping underwriters, never binding.',to:'#ai',c:'#16a34a'},
+];
+function landing(){const m=$("#main");
+  const stages=L_STAGES.map(s=>`<a class="lstage" href="${s.to}" style="border-top-color:${s.c}">
+    <div class="sn">${s.n}</div><div class="st">${s.t}</div><div class="sb">${s.b}</div>
+    <div class="so" style="color:${s.c}">open →</div></a>`).join("");
+  const pillars=L_PILLARS.map(p=>`<a class="lpillar" href="${p.to}" style="border-top-color:${p.c}">
+    <div class="pe">${p.e}</div><h3>${p.t}</h3><p>${p.b}</p><div class="po" style="color:${p.c}">open →</div></a>`).join("");
+  m.innerHTML=`
+    <div class="lhero">
+      <span class="eyebrow">Bricksurance Re · Reinsurance Intelligence Workbench</span>
+      <h1>Treaty reinsurance, end to end — on one platform</h1>
+      <p class="lead">From a broker slip to a bound treaty to the capital it consumes: every submission priced <i>and</i> book-aware, and every catastrophe answered in seconds — built entirely on Databricks.</p>
+      <div class="lcta">
+        <a class="primary" href="#portfolio">▦ Open the Control Tower →</a>
+        <a class="ghost" href="#sub/sub:900002">⚡ Work the portfolio bomb</a>
+        <a class="ghost" href="#learn">🎓 Learn reinsurance</a>
+      </div>
+    </div>
+    <div class="about"><b>About this demo.</b> This is <b>not a Databricks product</b>. It is an example of a real business process — <b>treaty reinsurance underwriting and capital management</b> — built <b>purely on Databricks</b>, using standard platform services: Unity Catalog, Lakeflow Declarative Pipelines, Auto Loader, Feature Engineering, MLflow Model Serving, Mosaic AI (Agent Framework · Document AI), AI/BI Genie, the Foundation Model API (Claude) and Databricks Apps. <b>Bricksurance Re</b> and its cedants (including Bricksurance SE) are synthetic — there is no real customer data. Cat-model output and the placement network are external boundaries we <b>ingest from and never rebuild</b>; the accumulation and capital figures are illustrative.</div>
+
+    <div class="lsec">
+      <div class="lh">↻ <h2>What this is — the underwriting cycle, end to end</h2></div>
+      <p class="lhsub">A submission lands; the platform reads it, triages it, prices it, and — the crux — shows what binding it does to the peak-zone accumulation and the capital, before anyone signs. Then when a storm hits, the same book answers in seconds. <b>The accumulation and capital decide the deal</b>, so being book-aware is the centre of gravity. Click any stage to jump to where it lives in the workbench.</p>
+      <div class="lstages">${stages}</div>
+    </div>
+
+    <div class="lsec">
+      <div class="eyebrow">The three things this platform makes possible</div>
+      <div class="lpillars" style="margin-top:10px">${pillars}</div>
+    </div>
+
+    <a class="startbanner" href="#portfolio">
+      <div><div class="eyebrow" style="color:#c4b5fd">Start here</div>
+        <h3>The CRO Control Tower — the whole book at a glance</h3>
+        <p>Peak-zone capacity versus appetite at the 1-in-200, the Solvency II capital position, and the renewal flood on the desk. Every tile drills to the rows it is computed from.</p></div>
+      <span class="go">▦ Open the Control Tower →</span>
+    </a>
+
+    <div class="lfoot">
+      <a href="#intake">⛁ Ingestion</a><a href="#governance">🛡 Governance</a><a href="#ai">🤖 Reinsurance AI</a><a href="#learn">🎓 Learn</a>
+    </div>`;}
 
 // ─────────── Control Tower (CRO — the bookend) ───────────
 async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">Loading control tower…</div>';
