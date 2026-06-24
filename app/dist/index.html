@@ -273,13 +273,13 @@ FROM   gold_capital_position;</div></div>`);}
 let DESK=[], DESK_FILTER="new";
 async function queue(){const m=$("#main");m.innerHTML='<div class="loading">Loading the desk…</div>';
   const d=await api("/submissions"); DESK=d.rows; const st=d.stats||{};
-  const intake=await api("/intake");
+  const intake=await api("/intake");DESK_Q=intake.quarantine||[];
   const manual=(intake.channels||[]).filter(c=>c.path==='manual').reduce((a,c)=>a+Number(c.n),0);
-  const quar=(intake.quarantine||[]).length;
+  const quar=DESK_Q.length;
   const counts={};DESK.forEach(r=>counts[r.status]=(counts[r.status]||0)+1);
   const banner=`<div class="card" style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;background:#0f172a;color:#fff;border:0">
      <div><div class="eyebrow" style="color:#c4b5fd">Renewal season</div><div class="big" style="color:#fff">${st.this_week||0} in this week</div><div class="muted" style="color:#cbd5e1">${st.open_new||0} open · 1-Jan renewal ${st.renewal_date||''}</div></div>
-     <div style="border-left:1px solid rgba(255,255,255,.15);padding-left:22px"><div class="muted" style="color:#cbd5e1">Intake</div><div style="font-size:15px;font-weight:700">${DESK.length} subs · ${manual} via manual path · ${quar} quarantined</div><div class="muted" style="color:#94a3b8;font-size:11px">clean ADEPT/CDR feed vs messy manual — bad rows quarantined by DLT</div></div>
+     <div style="border-left:1px solid rgba(255,255,255,.15);padding-left:22px"><div class="muted" style="color:#cbd5e1">Intake</div><div style="font-size:15px;font-weight:700">${DESK.length} subs · ${manual} via manual path · <span style="cursor:pointer;text-decoration:underline dotted" onclick="deskQuarantineDrill()">${quar} quarantined ↗</span></div><div class="muted" style="color:#94a3b8;font-size:11px">clean ADEPT/CDR feed vs messy manual — bad rows quarantined by DLT (click)</div></div>
      <div style="margin-left:auto;text-align:right"><div class="muted" style="color:#cbd5e1">The pain</div><div style="font-size:13px;max-width:300px">Brokers move in hours. Each one: priced right <i>and</i> book-aware?</div></div></div>`;
   const chip=(k,l)=>`<button class="btn ${DESK_FILTER===k?'':'ghost'}" style="margin:0 6px 0 0" onclick="DESK_FILTER='${k}';queue()">${l} ${k==='all'?DESK.length:(counts[k]||0)}</button>`;
   const heroes=`<div class="grid g2" style="margin:4px 0 14px">
@@ -297,7 +297,19 @@ async function queue(){const m=$("#main");m.innerHTML='<div class="loading">Load
     ${present('The underwriter daily flood — 1-Jan submissions landing via the clean feed and the messy manual path. Two heroes are pinned at the top: a clean fast-track, and the portfolio bomb.')}
     ${banner}${heroes}
     <div style="margin:10px 0">${chip('new','New')}${chip('quoted','Quoted')}${chip('bound','Bound')}${chip('declined','Declined')}${chip('all','All')}</div>
-    <div class="card"><table><thead><tr><th>Submission</th><th>Cedant</th><th>Structure</th><th>Zone</th><th>RoL</th><th>Channel</th><th>Status</th><th>Received</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+    <div class="card"><table><thead><tr><th>Submission</th><th>Cedant</th><th>Structure</th><th>Zone</th><th>RoL</th><th>Channel</th><th>Status</th><th>Received</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="freshbar"><span class="dot"></span> Live from <code>silver_submissions</code> — ${DESK.length} rows, queried just now. <b>Every row opens the live UC-function decision view;</b> malformed rows are quarantined by DLT expectations (click the count above).</div>`;}
+let DESK_Q=[];
+function deskQuarantineDrill(){const q=DESK_Q||[];
+  const rows=q.map(r=>`<tr><td><b>${r.submission_public_id||'—'}</b></td><td>${r.peril||''}</td><td class="muted">${r.quarantine_reason||''}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">no quarantined rows right now</td></tr>';
+  openModal(`
+    <div class="eyebrow">Renewal desk · quarantine</div>
+    <h1 style="font-size:21px;margin:2px 0 4px">Nothing silently lost — ${q.length} rows held back</h1>
+    <p class="muted" style="margin:0 0 14px">Submissions that fail a DLT data-quality expectation are routed to a quarantine table instead of polluting the book — they never reach the desk above.</p>
+    <div class="tscroll"><table><thead><tr><th>Submission</th><th>Peril</th><th>Why it was quarantined</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="srcbar"><b>Source · live from Unity Catalog.</b> <code>bronze_quarantine_loss</code> — populated by <code>@dlt.expect_or_drop</code> rules in the medallion pipeline; the pass/fail counts are on the Ingestion page (computed from the DLT event log). <span class="sqltog" onclick="toggleSql('sql-q')">▸ show the SQL</span>
+      <div class="sqlbox" id="sql-q">SELECT submission_public_id, peril, quarantine_reason
+FROM   bronze_quarantine_loss;   -- rows dropped by DLT expectations, kept for audit</div></div>`);}
 
 // capacity bar: appetite line fixed; current fill + marginal overflow (red past the line)
 function capBar(cur,marg,app){cur=Number(cur)||0;marg=Number(marg)||0;app=Number(app)||0;
@@ -368,6 +380,15 @@ async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading"
         <ul class="reasons">${rl(cp.reasons)}</ul></div>
     </div>
     <div class="muted" style="font-size:11px;margin-top:8px">Accumulation &amp; capital use illustrative, explicable factors — in production these UC functions integrate blended vendor cat-model output and the capital engine. The platform pattern (UC functions called live) is real; the coefficients are demo placeholders.</div>
+    <div class="srcbar" style="margin-top:10px"><b>Computed live by Unity Catalog functions — nothing on this page is hardcoded in the app.</b> Each card above is one UC-function call returning a STRUCT the app renders verbatim; the what-if slider re-runs another. <span class="sqltog" onclick="toggleSql('sql-sub')">▸ show the calls</span>
+      <div class="sqlbox" id="sql-sub">SELECT fn_submission_summary('${sid}');
+SELECT fn_triage_submission('${sid}');     -- Appetite / Triage card
+SELECT fn_price_submission('${sid}');      -- Technical price card (RoL / burning cost)
+SELECT fn_accumulation_impact('${sid}');   -- Marginal accumulation card  (THE CRUX)
+SELECT fn_capital_impact('${sid}');        -- Marginal capital card        (THE CRUX)
+SELECT fn_recommendation('${sid}');        -- the bind / refer / decline call
+-- the what-if slider re-runs fn_accumulation_whatif(zone, limit, attachment) on each drag
+-- the supervisor box is a Mosaic AI agent that calls these same functions itself</div></div>
     ${whatif?`<div style="margin-top:16px">${whatif}</div>`:''}
     <div class="grid g2" style="margin-top:16px">
       <div class="card" id="alt-card"><h3>Portfolio alternative</h3><span class="muted">loading…</span></div>
@@ -405,14 +426,15 @@ async function logDecision(action){if(!DEC_SID)return;const o=$("#dec-out");o.te
   catch(e){o.textContent="failed";}}
 
 // ─────────── Cat Event Response (THE WOW) ───────────
+let EV_R=null, EV_TD=[], EV_EID=null;
 async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loading">Assembling the book-wide event response…</div>';
   let eid=arg;
   if(!eid){const ev=await api("/events");eid=(ev.events&&ev.events[0]||{}).event_public_id;}
   if(!eid){m.innerHTML='<div class="eyebrow">Cat Event</div><h1>No live event</h1><p class="sub">No catastrophe event in the book right now.</p>';return;}
-  const r=await api("/event/"+encodeURIComponent(eid));
+  const r=await api("/event/"+encodeURIComponent(eid));EV_R=r;EV_EID=eid;
   const sb=Number(r.solvency_before_pct), sa=Number(r.solvency_after_pct);
-  const gauge=`<div class="card" style="background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;border:0">
-     <div class="eyebrow" style="color:#c4b5fd">Solvency II ratio — impact</div>
+  const gauge=`<div class="card drill" onclick="eventSolvencyDrill()" style="background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;border:0">
+     <div class="eyebrow" style="color:#c4b5fd">Solvency II ratio — impact <span style="color:#93c5fd;text-transform:none;letter-spacing:0">· click for the build →</span></div>
      <div style="display:flex;align-items:center;gap:20px;margin-top:6px;flex-wrap:wrap">
        <div><div style="font-size:34px;font-weight:800">${pct(sb)}</div><div class="muted" style="color:#94a3b8">before</div></div>
        <div style="font-size:28px;color:#f87171">→</div>
@@ -420,26 +442,79 @@ async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loadin
        <div style="margin-left:auto;text-align:right"><div style="font-size:13px;color:#cbd5e1">still above the 100% regulatory floor</div><div class="muted" style="color:#94a3b8">own funds ${eurm(r.eligible_own_funds_eur)} → ${eurm(r.own_funds_after_eur)}</div></div>
      </div></div>`;
   const k=(l,v,c)=>`<div class="card"><h3>${l}</h3><div class="big" ${c?`style="color:${c}"`:''}>${v}</div></div>`;
+  const kd=(l,v,c)=>`<div class="card drill" onclick="eventLossDrill()"><h3>${l}</h3><div class="big" ${c?`style="color:${c}"`:''}>${v}</div><div class="clickhint">↳ click: the responding treaties →</div></div>`;
   m.innerHTML=`<div class="eyebrow">CRO · live cat event</div><h1>${r.event_name}</h1>
     <p class="sub">${r.region} · 1-in-${r.return_period} · industry loss ${eurm(r.industry_loss_eur)}. Days of manual exposure work — here, the book-wide response in seconds.</p>
     ${present('The wow — a live catastrophe answered in seconds: book-wide gross and net loss, reinstatements, which treaties respond, the most-exposed cedant, and the hit to the Solvency II ratio.')}
     ${gauge}
     <div class="grid g4" style="margin-top:16px">
-      ${k('Treaties responding',r.n_treaties_responding)}
-      ${k('Gross loss',eurm(r.gross_loss_eur),'#dc2626')}
+      ${kd('Treaties responding',r.n_treaties_responding)}
+      ${kd('Gross loss',eurm(r.gross_loss_eur),'#dc2626')}
       ${k('Reinstatement income',eurm(r.reinstatement_premium_eur),'#16a34a')}
-      ${k('Net loss',eurm(r.net_loss_eur),'#dc2626')}
+      ${kd('Net loss',eurm(r.net_loss_eur),'#dc2626')}
     </div>
     <div id="ev-narr" class="narr" style="margin-top:16px"><span class="tag">Cat-Event agent</span><span class="muted">briefing the CRO…</span></div>
     <div class="card" style="margin-top:16px"><h3>Most exposed cedant</h3><b>${r.top_cedant}</b> — ${eurm(r.top_cedant_loss_eur)} ceded loss from this event</div>
     <div class="card" style="margin-top:16px"><h3>Which treaties respond</h3><div id="ev-treaties"><span class="muted">loading…</span></div></div>
     <div class="prov">Cross-treaty loss, reinstatement and the capital hit are computed by <code>fn_event_response</code> on the live book — Databricks ingests the vendor event footprint, it does not run a cat engine.</div>`;
   api("/event/"+encodeURIComponent(eid)+"/narrate").then(n=>{$("#ev-narr").innerHTML=`<span class="tag">Cat-Event agent · ${n.cache||''}</span>${n.text||''}`;}).catch(()=>{$("#ev-narr").innerHTML='<span class="tag">Cat-Event agent</span><span class="muted">unavailable</span>';});
-  api("/event/"+encodeURIComponent(eid)+"/treaties").then(td=>{const rows=(td.treaties||[]).map(x=>`<tr>
-      <td><b>${x.treaty_id}</b>${(x.is_correlated_ref===true||x.is_correlated_ref==='true')?' <span class="pill red">correlated</span>':''}</td>
-      <td>${x.cedant}</td><td>${x.structure}</td><td>${eurm(x.ceded_loss_eur)}</td>
-      <td>${(x.reinstatement===true||x.reinstatement==='true')?'<span class="pill amber">reinstated</span>':'—'}</td></tr>`).join("");
-    $("#ev-treaties").innerHTML=`<table><thead><tr><th>Treaty</th><th>Cedant</th><th>Structure</th><th>Ceded loss</th><th>Reinstatement</th></tr></thead><tbody>${rows}</tbody></table>`;}).catch(()=>{});}
+  api("/event/"+encodeURIComponent(eid)+"/treaties").then(td=>{EV_TD=td.treaties||[];
+    const tot=EV_TD.reduce((a,x)=>a+Number(x.ceded_loss_eur||0),0);
+    const rows=EV_TD.map(x=>`<tr>
+      <td><b>${x.treaty_id}</b>${isCorr(x.is_correlated_ref)?' <span class="pill red">correlated</span>':''}</td>
+      <td>${x.cedant}</td><td>${x.structure}</td><td style="text-align:right">${eurm(x.ceded_loss_eur)}</td>
+      <td>${isCorr(x.reinstatement)?'<span class="pill amber">reinstated</span>':'—'}</td></tr>`).join("");
+    $("#ev-treaties").innerHTML=`<table><thead><tr><th>Treaty</th><th>Cedant</th><th>Structure</th><th style="text-align:right">Ceded loss</th><th>Reinstatement</th></tr></thead>
+      <tbody>${rows}<tr class="totrow"><td colspan="3">TOTAL — ${EV_TD.length} treaties = gross loss</td><td style="text-align:right">${eurm(tot)}</td><td></td></tr></tbody></table>
+      <div class="muted" style="font-size:11px;margin-top:6px">The ${EV_TD.length} ceded losses sum to the gross loss above — computed by <code>fn_event_treaty_detail</code> across the live book.</div>`;}).catch(()=>{});}
+
+function eventLossDrill(){const r=EV_R||{};const td=EV_TD||[];
+  if(!td.length){openModal('<div class="loading">Loading the responding treaties…</div>');api("/event/"+encodeURIComponent(EV_EID)+"/treaties").then(d=>{EV_TD=d.treaties||[];eventLossDrill();});return;}
+  const tot=td.reduce((a,x)=>a+Number(x.ceded_loss_eur||0),0);
+  const rows=td.map(x=>`<tr${isCorr(x.is_correlated_ref)?' style="background:#fef2f2"':''}>
+    <td><b>${x.treaty_id}</b>${isCorr(x.is_correlated_ref)?' <span class="pill red" style="font-size:9px">correlated</span>':''}</td>
+    <td>${x.cedant}</td><td>${x.structure}</td><td>${isCorr(x.reinstatement)?'<span class="pill amber">yes</span>':'—'}</td>
+    <td style="text-align:right">${eurm(x.ceded_loss_eur)}</td></tr>`).join("");
+  openModal(`
+    <div class="eyebrow">Cat event · how the net loss is computed</div>
+    <h1 style="font-size:21px;margin:2px 0 2px">${r.event_name} — net loss ${eurm(r.net_loss_eur)}</h1>
+    <p class="muted" style="margin:0 0 6px">${r.region} · 1-in-${r.return_period}</p>
+    <div class="recon"><div class="rb">${eurm(r.net_loss_eur)}</div>
+      <div class="eq">net loss = <b>the sum of ${r.n_treaties_responding} responding treaties</b> (${eurm(tot)} gross) <b>− reinstatement income</b> ${eurm(r.reinstatement_premium_eur)}.<br>Each treaty either responds or it does not — by its attachment, limit and the event footprint. Not a typed number.</div></div>
+    <div class="tscroll"><table><thead><tr><th>Treaty</th><th>Cedant</th><th>Structure</th><th>Reinstated</th><th style="text-align:right">Ceded loss</th></tr></thead>
+      <tbody>${rows}
+      <tr class="totrow"><td colspan="4">Gross loss — ${td.length} treaties</td><td style="text-align:right">${eurm(tot)}</td></tr>
+      <tr><td colspan="4">− reinstatement income</td><td style="text-align:right">−${eurm(r.reinstatement_premium_eur)}</td></tr>
+      <tr class="totrow"><td colspan="4">= Net loss to Bricksurance Re</td><td style="text-align:right">${eurm(r.net_loss_eur)}</td></tr></tbody></table></div>
+    <p class="muted" style="margin:8px 0 0">Most exposed cedant: <b>${r.top_cedant}</b> — ${eurm(r.top_cedant_loss_eur)}.</p>
+    <div class="srcbar"><b>Source · live from Unity Catalog.</b> <code>fn_event_response</code> (book-wide totals) + <code>fn_event_treaty_detail</code> (per-treaty response) over <code>event_treaty_losses</code> and the in-force book. Databricks ingests the vendor event footprint; it does not run a cat engine. <span class="sqltog" onclick="toggleSql('sql-evl')">▸ show the SQL</span>
+      <div class="sqlbox" id="sql-evl">-- the responding treaties that sum to the gross loss
+SELECT treaty_id, cedant, ceded_loss_eur, reinstatement
+FROM   fn_event_treaty_detail('${EV_EID}')
+ORDER  BY ceded_loss_eur DESC;
+-- gross = SUM(ceded_loss_eur); net = gross − reinstatement_premium_eur (fn_event_response)</div></div>`);}
+
+function eventSolvencyDrill(){const r=EV_R||{};
+  const ofb=Number(r.eligible_own_funds_eur),ofa=Number(r.own_funds_after_eur),net=Number(r.net_loss_eur);
+  const sb=Number(r.solvency_before_pct),sa=Number(r.solvency_after_pct);
+  const scr=sb>0?ofb/(sb/100):0;
+  openModal(`
+    <div class="eyebrow">Cat event · how the solvency hit resolves</div>
+    <h1 style="font-size:21px;margin:2px 0 12px">Solvency II ratio ${pct(sb)} → ${pct(sa)}</h1>
+    <div class="tscroll" style="max-height:none"><table><tbody>
+      <tr><td>Eligible own funds — before</td><td style="text-align:right">${eurm(ofb)}</td></tr>
+      <tr><td>− event net loss (from the treaties)</td><td style="text-align:right;color:#dc2626">−${eurm(net)}</td></tr>
+      <tr class="totrow"><td>= Eligible own funds — after</td><td style="text-align:right">${eurm(ofa)}</td></tr>
+      <tr><td>÷ SCR (1-in-200 diversified BSCR — unchanged by the event)</td><td style="text-align:right">${eurm(scr)}</td></tr>
+      <tr class="totrow"><td>= Solvency II ratio after</td><td style="text-align:right">${pct(sa)}</td></tr>
+      </tbody></table></div>
+    <p class="muted" style="margin:8px 0 0">Still above the 100% regulatory floor. The event consumes own funds; the SCR is the same 1-in-200 capital requirement as on the Control Tower.</p>
+    <div class="srcbar"><b>Source · live from Unity Catalog.</b> <code>fn_event_response</code> over the in-force book + <code>gold_capital_position</code> for the SCR. <span class="sqltog" onclick="toggleSql('sql-evs')">▸ show the SQL</span>
+      <div class="sqlbox" id="sql-evs">SELECT eligible_own_funds_eur,        -- before
+       own_funds_after_eur,          -- = own funds − net_loss_eur
+       solvency_before_pct,          -- own funds ÷ SCR
+       solvency_after_pct            -- own funds after ÷ SCR
+FROM   fn_event_response('${EV_EID}');</div></div>`);}
 
 // ─────────── Ingestion (feed map · quality scorecard · Document AI · geo · quarantine) ───────────
 const TYPE_COL={document:'#6d28d9','file · schema-drift':'#d97706',geospatial:'#0891b2','streaming · JSON':'#16a34a',vendor:'#2563eb',structured:'#475569',internal:'#475569'};
@@ -452,7 +527,13 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
     <div class="card" style="margin-top:16px"><h3>🧠 Document AI — unstructured MRC slip → structured fields</h3>
       <div class="muted" style="font-size:12.5px">Reinsurers re-key slips by hand today. Here <code>ai_query</code> (Claude) extracts the fields from the slip text on a UC Volume, with a confidence gate that quarantines weak extractions.</div>
       <div id="ing-doc" style="margin-top:10px"><span class="muted">loading…</span></div></div>
-    <div class="card" style="margin-top:16px"><h3>Quality scorecard — DLT expectations (live event log)</h3><div id="ing-rules"><span class="muted">loading…</span></div></div>
+    <div class="card" style="margin-top:16px"><h3>Quality scorecard — DLT expectations (live event log)</h3><div id="ing-rules"><span class="muted">loading…</span></div>
+      <div class="srcbar"><b>Source · the pipeline's own event log.</b> <code>gold_dq_scorecard</code> is built from <code>medallion_event_log</code> (the DLT pipeline's <code>event_log</code>) — these pass/fail counts are emitted by Lakeflow as the pipeline runs, not typed by us. <span class="sqltog" onclick="toggleSql('sql-dq')">▸ show the SQL</span>
+        <div class="sqlbox" id="sql-dq">-- DLT publishes expectation results to its event log as the pipeline runs; we roll them up
+SELECT layer, table_name, expectation, predicate,
+       passing_records, failing_records, pass_rate_pct
+FROM   gold_dq_scorecard          -- ← derived from medallion_event_log (DLT event_log)
+ORDER  BY layer, table_name;</div></div></div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card" id="ing-geo"><h3>Geospatial accumulation (H3 · CRESTA)</h3><span class="muted">loading…</span></div>
       <div class="card" id="ing-quar"><h3>Quarantine — nothing silently lost</h3><span class="muted">loading…</span></div>
