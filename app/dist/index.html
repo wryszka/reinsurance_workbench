@@ -101,6 +101,34 @@
   .atile.k-genie:before{background:linear-gradient(90deg,#ea580c,#fb923c)}.k-genie .ic{background:#ffedd5;color:#ea580c}.k-genie .role{color:#ea580c}
   .sech{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:22px 0 4px}
   .sech .cnt{color:#cbd5e1;font-weight:600}
+  /* clickable tile affordance + provenance */
+  .card.drill{cursor:pointer;transition:transform .12s,box-shadow .12s}
+  .card.drill:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(15,23,42,.09)}
+  .srcpill{display:inline-block;font-size:10px;color:#475569;background:#f8fafc;border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-top:10px;font-family:ui-monospace,SFMono-Regular,monospace}
+  .clickhint{font-size:11px;color:var(--blue);font-weight:600;margin-top:8px}
+  .freshbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin:12px 0 0}
+  .freshbar .dot{width:7px;height:7px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)}
+  .freshbar code{font-family:ui-monospace,monospace;color:#334155}
+  /* drill modal */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:36px 20px;overflow:auto}
+  .modal-card{background:#fff;border-radius:16px;max-width:880px;width:100%;padding:24px 26px 26px;box-shadow:0 24px 60px rgba(0,0,0,.32)}
+  .modal-x{float:right;cursor:pointer;color:var(--mut);font-size:22px;line-height:1;border:0;background:none}
+  .recon{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;background:linear-gradient(90deg,#eef2ff,#faf5ff);border:1px solid #ddd6fe;border-radius:12px;padding:15px 18px;margin:8px 0 18px}
+  .recon .rb{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .recon .eq{font-size:13.5px;color:#4338ca;line-height:1.45}
+  .tscroll{max-height:290px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .tscroll table{font-size:12.5px}
+  .tscroll th{position:sticky;top:0;background:#f8fafc;z-index:1}
+  .totrow td{font-weight:800;border-top:2px solid var(--ink);background:#f8fafc}
+  .vbar{display:flex;align-items:center;gap:12px;margin:6px 0}
+  .vbar .vn{width:92px;font-size:12px;color:var(--mut)}
+  .vbar .vt{flex:1;height:20px;background:#eef2ff;border-radius:6px;overflow:hidden}
+  .vbar .vt>i{display:block;height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa)}
+  .vbar .vv{width:96px;text-align:right;font-size:12.5px;font-weight:700}
+  .srcbar{margin-top:18px;background:#f1f5f9;border:1px solid var(--line);border-radius:10px;padding:12px 15px;font-size:11.5px;color:var(--mut);line-height:1.7}
+  .srcbar code,.srcbar b code{font-family:ui-monospace,monospace;background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:#334155}
+  .sqltog{color:var(--blue);cursor:pointer;font-weight:600}
+  .sqlbox{display:none;margin-top:10px;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:13px 15px;font-family:ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;line-height:1.55}
 </style>
 </head>
 <body>
@@ -149,21 +177,22 @@ function renderNav(){let route=(location.hash||"#portfolio").slice(1).split("/")
 
 window.addEventListener("hashchange",route);
 async function boot(){CFG=await api("/config");route();}
-function route(){renderNav();const h=(location.hash||"#portfolio").slice(1);const[r,arg]=h.split("/");
+function route(){if(typeof closeModal==="function")closeModal();renderNav();const h=(location.hash||"#portfolio").slice(1);const[r,arg]=h.split("/");
   ({portfolio:portfolio,queue:queue,event:eventPage,intake:intake,ai:ai,governance:governance,learn:learn,sub:subView}[r]||portfolio)(arg);}
 
 // ─────────── Control Tower (CRO — the bookend) ───────────
 async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">Loading control tower…</div>';
   const d=await api("/control-tower");
   const zones=d.zones.map(z=>{const u=Number(z.utilisation_pct);const col=z.rag;
-    return `<div class="card"><h3>${z.zone_name}</h3>
+    return `<div class="card drill" onclick="zoneDrill('${z.zone_id}')"><h3>${z.zone_name}</h3>
       <div class="big">${pct(u)} <span class="pill ${col}">${col}</span></div>
       <div class="muted">${z.peril} · ${z.region} · ${z.n_treaties} treaties</div>
       <div class="bar"><i style="width:${Math.min(u,100)}%;background:${col==='RED'?'#dc2626':col==='AMBER'?'#d97706':'#16a34a'}"></i></div>
       <div class="kv"><span>Current 1-in-200 PML</span><b>${eurm(z.current_pml_1in200_eur)}</b></div>
       <div class="kv"><span>Appetite</span><b>${eurm(z.appetite_pml_1in200_eur)}</b></div>
-      <div class="kv"><span>Capacity remaining</span><b style="color:${Number(z.headroom_eur)<=20000000?'#dc2626':'#16a34a'}">${eurm(z.headroom_eur)}</b></div></div>`;}).join("");
-  const c=d.capital||{}, ev=d.live_event, rn=d.renewal||{};
+      <div class="kv"><span>Capacity remaining</span><b style="color:${Number(z.headroom_eur)<=20000000?'#dc2626':'#16a34a'}">${eurm(z.headroom_eur)}</b></div>
+      <div class="clickhint">↳ click: the ${z.n_treaties} treaties behind this number →</div></div>`;}).join("");
+  const c=d.capital||{}, ev=d.live_event, rn=d.renewal||{}, meta=d.meta||{};
   const evBanner=ev?`<div class="rec red" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="location.hash='#event/${ev.event_public_id}'">
      <span>⚠ Live event — ${ev.event_name} (${ev.region}), net loss ${eurm(ev.net_loss_eur)}. See the book-wide response →</span></div>`:'';
   const seasonBanner=`<div class="card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;background:#0f172a;color:#fff;border:0">
@@ -174,14 +203,71 @@ async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">
     <p class="sub">Peak-zone capacity versus appetite at the 1-in-200, blended across vendor cat output, with the Solvency II capital cross-link.</p>
     ${present('The CRO book at a glance — peak-zone capacity vs appetite at the 1-in-200, blended across three cat vendors, with the Solvency II capital cross-link. Open and close the demo here.')}
     ${evBanner}${seasonBanner}
-    <div class="grid g3" style="margin-top:16px">${zones}</div>
+    <div class="freshbar"><span class="dot"></span> Live from the gold marts — built by the medallion pipeline at <code>${meta.built_at||'—'}</code>, queried just now at <code>${meta.queried_at||'—'}</code>. <b>Every tile is clickable: drill to the rows it is computed from.</b></div>
+    <div class="grid g3" style="margin-top:14px">${zones}</div>
     <div class="grid g3" style="margin-top:16px">
-      <div class="card"><h3>Diversified BSCR</h3><div class="big">${eurm(c.diversified_bscr_eur)}</div><div class="muted">after cross-zone diversification</div></div>
-      <div class="card"><h3>Eligible own funds</h3><div class="big">${eurm(c.eligible_own_funds_eur)}</div></div>
-      <div class="card"><h3>Solvency II ratio</h3><div class="big">${pct(c.solvency_ratio_pct)}</div><div class="muted">own funds ÷ SCR (1-in-200)</div></div>
+      <div class="card drill" onclick="capitalDrill()"><h3>Diversified BSCR</h3><div class="big">${eurm(c.diversified_bscr_eur)}</div><div class="muted">after cross-zone diversification</div><div class="clickhint">↳ click: the capital build →</div></div>
+      <div class="card drill" onclick="capitalDrill()"><h3>Eligible own funds</h3><div class="big">${eurm(c.eligible_own_funds_eur)}</div><div class="muted">tier-1 capital available to absorb the 1-in-200</div></div>
+      <div class="card drill" onclick="capitalDrill()"><h3>Solvency II ratio</h3><div class="big">${pct(c.solvency_ratio_pct)}</div><div class="muted">own funds ÷ SCR (1-in-200)</div><div class="clickhint">↳ click: how this resolves →</div></div>
     </div>
-    <div class="note">Cat output is blended across ${d.cat_curves.length? '3 vendors that disagree by ~'+pct(d.cat_curves[0].divergence_pct):'multiple vendors'} at the 1-in-200. Databricks ingests and blends vendor EP curves — it never runs a cat engine.</div>
+    <div class="note">Cat output is blended across ${d.cat_curves.length? '3 vendors that disagree by ~'+pct(d.cat_curves[0].divergence_pct):'multiple vendors'} at the 1-in-200. Databricks ingests and blends vendor EP curves — it never runs a cat engine. <i>Click any peak-zone tile to see the three vendor curves and the treaties that sum to the book PML.</i></div>
     <div class="prov">One deal normally touches a placement tool, a separate exposure tool, a bordereaux process, a BI stack, and a spreadsheet for the capital call — here it is one platform.</div>`;}
+
+// ─────────── Control-tower drill-downs — prove the tiles are computed, not hardcoded ───────────
+function openModal(html){let r=$("#modalRoot");if(!r){r=document.createElement("div");r.id="modalRoot";document.body.appendChild(r);}
+  r.innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><button class="modal-x" onclick="closeModal()">×</button>${html}</div></div>`;}
+function closeModal(){const r=$("#modalRoot");if(r)r.innerHTML="";}
+function toggleSql(id){const e=document.getElementById(id);if(e)e.style.display=e.style.display==="block"?"none":"block";}
+const isCorr=(v)=>v===true||v==="true";
+async function zoneDrill(zid){openModal('<div class="loading">Loading the treaties behind this zone…</div>');
+  const d=await api("/control-tower/zone/"+encodeURIComponent(zid));
+  const z=d.zone||{},t=d.total||{},bl=d.blended||{},meta=d.meta||{};const tot=Number(t.total_eur||0);
+  const rows=(d.treaties||[]).map(r=>`<tr${isCorr(r.is_correlated_ref)?' style="background:#fef2f2"':''}>
+    <td><b>${r.treaty_id}</b>${isCorr(r.is_correlated_ref)?' <span class="pill red" style="font-size:9px">correlated</span>':''}</td>
+    <td>${r.cedant_id}</td><td>${r.structure}</td><td>${eurm(r.limit_eur)}</td>
+    <td style="text-align:right">${eurm(r.modeled_pml_1in200_contrib_eur)}</td></tr>`).join("");
+  const vmax=Math.max(...(d.vendors||[]).map(v=>Number(v.pml_eur)),1);
+  const vbars=(d.vendors||[]).map(v=>`<div class="vbar"><div class="vn">${v.vendor}</div><div class="vt"><i style="width:${Math.round(Number(v.pml_eur)/vmax*100)}%"></i></div><div class="vv">${eurm(v.pml_eur)}</div></div>`).join("");
+  openModal(`
+    <div class="eyebrow">Peak zone · how this tile is computed</div>
+    <h1 style="font-size:21px;margin:2px 0 2px">${z.zone_name} <span class="pill ${z.rag}">${z.rag} ${pct(z.utilisation_pct)}</span></h1>
+    <p class="muted" style="margin:0 0 6px">${z.peril} · ${z.region}</p>
+    <div class="recon"><div class="rb">${eurm(z.current_pml_1in200_eur)}</div>
+      <div class="eq">our book 1-in-200 PML = <b>the sum of ${t.n} in-force treaty contributions</b> in this zone (${eurm(tot)}).<br>Appetite ${eurm(z.appetite_pml_1in200_eur)} · capacity remaining ${eurm(z.headroom_eur)}. Not a typed number — it aggregates the rows below.</div></div>
+    <div class="tscroll"><table><thead><tr><th>Treaty</th><th>Cedant</th><th>Structure</th><th>Limit</th><th style="text-align:right">1-in-200 PML contribution</th></tr></thead>
+      <tbody>${rows}<tr class="totrow"><td colspan="4">TOTAL — ${t.n} treaties</td><td style="text-align:right">${eurm(tot)}</td></tr></tbody></table></div>
+    <div class="sech" style="margin-top:18px">Market view — three external cat vendors disagree</div>
+    <p class="muted" style="margin:0 0 8px">Vendors price this peril differently at the 1-in-200; we ingest and blend their EP curves (we never run a cat engine). This is the <b>industry/market</b> curve — our book PML above is Bricksurance Re's share of it.</p>
+    ${vbars}
+    <div class="vbar"><div class="vn"><b>Blended</b></div><div class="vt"><i style="width:100%;background:linear-gradient(90deg,#312e81,#6d28d9)"></i></div><div class="vv">${eurm(bl.blended_pml_eur)}</div></div>
+    <p class="muted" style="margin:6px 0 0">Range ${eurm(bl.vendor_min_pml_eur)}–${eurm(bl.vendor_max_pml_eur)} · divergence ${pct(bl.divergence_pct)} across ${bl.n_vendors} vendors.</p>
+    <div class="srcbar"><b>Source · live from Unity Catalog.</b> Tile: <code>gold_portfolio_position</code> · treaties: <code>inforce_treaties</code> · vendor curves: <code>cat_vendor_curves</code> → <code>gold_cat_blended</code>. Built by the pipeline at <code>${meta.built_at||'—'}</code>; queried live at <code>${meta.queried_at||'—'}</code>. <span class="sqltog" onclick="toggleSql('sql-zone')">▸ show the SQL</span>
+      <div class="sqlbox" id="sql-zone">-- the tile number, reconciled from its constituent treaties
+SELECT SUM(modeled_pml_1in200_contrib_eur)
+FROM   inforce_treaties
+WHERE  zone_id = '${z.zone_id}';
+-- equals current_pml_1in200_eur in gold_portfolio_position for this zone</div></div>`);}
+async function capitalDrill(){openModal('<div class="loading">Loading the capital build…</div>');
+  const d=await api("/control-tower/capital");const a=d.agg||{},meta=d.meta||{};
+  const zr=(d.zones||[]).map(z=>`<tr><td>${z.zone_name}</td><td style="text-align:right">${eurm(z.standalone_scr_eur)}</td></tr>`).join("");
+  const dben=Number(a.sum_standalone_scr_eur||0)-Number(a.diversified_bscr_eur||0);
+  openModal(`
+    <div class="eyebrow">Capital · how the solvency ratio resolves</div>
+    <h1 style="font-size:21px;margin:2px 0 12px">Solvency II ratio = ${pct(a.solvency_ratio_pct)}</h1>
+    <div class="tscroll" style="max-height:none"><table>
+      <thead><tr><th>Standalone SCR by peak zone</th><th style="text-align:right">1-in-200 SCR</th></tr></thead>
+      <tbody>${zr}
+      <tr class="totrow"><td>Sum of standalone SCR</td><td style="text-align:right">${eurm(a.sum_standalone_scr_eur)}</td></tr>
+      <tr><td>− diversification benefit (${pct(a.diversification_benefit_pct)})</td><td style="text-align:right">−${eurm(dben)}</td></tr>
+      <tr class="totrow"><td>= Diversified BSCR (the SCR)</td><td style="text-align:right">${eurm(a.diversified_bscr_eur)}</td></tr>
+      <tr><td>Eligible own funds</td><td style="text-align:right">${eurm(a.eligible_own_funds_eur)}</td></tr>
+      <tr class="totrow"><td>Solvency II ratio = own funds ÷ SCR</td><td style="text-align:right">${pct(a.solvency_ratio_pct)}</td></tr>
+      </tbody></table></div>
+    <div class="srcbar"><b>Source · live from Unity Catalog.</b> <code>gold_capital_position</code>. Built by the pipeline at <code>${meta.built_at||'—'}</code>; queried live at <code>${meta.queried_at||'—'}</code>. <span class="sqltog" onclick="toggleSql('sql-cap')">▸ show the SQL</span>
+      <div class="sqlbox" id="sql-cap">SELECT solvency_ratio_pct,      -- eligible_own_funds_eur / diversified_bscr_eur
+       diversified_bscr_eur,    -- SUM(standalone_scr) × (1 − diversification_benefit_pct)
+       eligible_own_funds_eur
+FROM   gold_capital_position;</div></div>`);}
 
 // ─────────── Renewal Desk (the daily flood) ───────────
 let DESK=[], DESK_FILTER="new";

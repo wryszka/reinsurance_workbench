@@ -55,9 +55,53 @@ def control_tower():
         "renewal": f"""SELECT CAST(max(renewal_date) AS STRING) renewal_date,
                        sum(CASE WHEN status='new' THEN 1 ELSE 0 END) open_new,
                        count(*) total FROM {config.fqn('silver_submissions')}""",
+        # provenance: when the gold marts were built by the pipeline + when this request hit the warehouse
+        "meta": f"""SELECT CAST(current_timestamp() AS STRING) queried_at,
+                    CAST(max(_gold_built_at) AS STRING) built_at FROM {config.fqn('gold_portfolio_position')}""",
     })
     return {"zones": r["pos"], "capital": sql.first(r["cap"]) or {}, "cat_curves": r["cat"],
-            "live_event": sql.first(r["ev"]), "renewal": sql.first(r["renewal"]) or {}}
+            "live_event": sql.first(r["ev"]), "renewal": sql.first(r["renewal"]) or {},
+            "meta": sql.first(r["meta"]) or {}}
+
+
+# Drill-downs that prove the tiles are computed, not hardcoded: a zone PML is the SUM of its in-force
+# treaty contributions; the cat number sits between the three vendor curves; the solvency ratio is the
+# capital build. Each returns the constituent rows + source tables + build/query timestamps.
+@app.get("/api/control-tower/zone/{zone_id}")
+def control_tower_zone(zone_id: str):
+    z = sql.esc(zone_id)
+    r = sql.query_many({
+        "zone": f"""SELECT zone_id, zone_name, peril, region, current_pml_1in200_eur, appetite_pml_1in200_eur,
+                    headroom_eur, utilisation_pct, rag, n_treaties FROM {config.fqn('gold_portfolio_position')}
+                    WHERE zone_id='{z}'""",
+        "treaties": f"""SELECT treaty_id, cedant_id, lob, structure, attachment_eur, limit_eur,
+                        ceded_premium_eur, expected_loss_eur, modeled_pml_1in200_contrib_eur, is_correlated_ref
+                        FROM {config.fqn('inforce_treaties')} WHERE zone_id='{z}'
+                        ORDER BY modeled_pml_1in200_contrib_eur DESC""",
+        "total": f"""SELECT count(*) n, sum(modeled_pml_1in200_contrib_eur) total_eur,
+                     sum(ceded_premium_eur) prem_eur FROM {config.fqn('inforce_treaties')} WHERE zone_id='{z}'""",
+        "vendors": f"""SELECT vendor, pml_eur FROM {config.fqn('cat_vendor_curves')}
+                       WHERE zone_id='{z}' AND return_period=200 ORDER BY vendor""",
+        "blended": f"""SELECT blended_pml_eur, vendor_min_pml_eur, vendor_max_pml_eur, divergence_pct, n_vendors
+                       FROM {config.fqn('gold_cat_blended')} WHERE zone_id='{z}' AND return_period=200""",
+        "meta": f"""SELECT CAST(current_timestamp() AS STRING) queried_at,
+                    CAST(max(_gold_built_at) AS STRING) built_at FROM {config.fqn('gold_portfolio_position')}""",
+    })
+    return {"zone": sql.first(r["zone"]) or {}, "treaties": r["treaties"], "total": sql.first(r["total"]) or {},
+            "vendors": r["vendors"], "blended": sql.first(r["blended"]) or {}, "meta": sql.first(r["meta"]) or {}}
+
+
+@app.get("/api/control-tower/capital")
+def control_tower_capital():
+    r = sql.query_many({
+        "zones": f"""SELECT zone_name, current_pml_1in200_eur, standalone_scr_eur
+                     FROM {config.fqn('gold_capital_position')} ORDER BY standalone_scr_eur DESC""",
+        "agg": f"""SELECT DISTINCT sum_standalone_scr_eur, diversification_benefit_pct, diversified_bscr_eur,
+                   eligible_own_funds_eur, solvency_ratio_pct FROM {config.fqn('gold_capital_position')}""",
+        "meta": f"""SELECT CAST(current_timestamp() AS STRING) queried_at,
+                    CAST(max(_gold_built_at) AS STRING) built_at FROM {config.fqn('gold_capital_position')}""",
+    })
+    return {"zones": r["zones"], "agg": sql.first(r["agg"]) or {}, "meta": sql.first(r["meta"]) or {}}
 
 
 # ─────────────────────────── renewal desk (the daily flood) ───────────────────────────
