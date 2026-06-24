@@ -62,12 +62,14 @@ def ask_agent(question: str, custom_inputs: dict = None, use_cache: bool = None)
         tools = [t.get("tool") for t in (out.get("custom_outputs") or {}).get("trace", [])]
     except Exception as e:
         return {"text": f"[agent unavailable: {str(e)[:160]}]", "tools": [], "cache": "error", "endpoint": endpoint}
-    if use_cache:
-        try:
-            _write(key, endpoint, json.dumps({"text": text, "tools": tools}))
-        except Exception:
-            pass
-    return {"text": text, "tools": tools, "cache": ("miss" if use_cache else "bypass"), "endpoint": endpoint}
+    # Always persist (no TTL): cached mode fills on miss; live mode overwrites — so the cache is only
+    # ever "recreated" by a live call or a demo reset, never by expiry.
+    try:
+        _ensure_cache()
+        _write(key, endpoint, json.dumps({"text": text, "tools": tools}))
+    except Exception:
+        pass
+    return {"text": text, "tools": tools, "cache": ("miss" if use_cache else "live"), "endpoint": endpoint}
 
 
 def narrate(role_substr: str, question: str, data: dict, use_cache: bool = None) -> dict:
@@ -93,9 +95,11 @@ def narrate(role_substr: str, question: str, data: dict, use_cache: bool = None)
         text = preds[0] if preds else ""
     except Exception as e:
         return {"text": f"[narration unavailable: {str(e)[:140]}]", "cache": "error", "endpoint": endpoint}
-    if use_cache:
-        try:
-            _write(key, endpoint, text)
-        except Exception:
-            pass
-    return {"text": text, "cache": ("miss" if use_cache else "bypass"), "endpoint": endpoint}
+    # Always persist (no TTL): live mode overwrites, cached mode fills on miss. Recreated only by a
+    # live call or a demo reset.
+    try:
+        _ensure_cache()
+        _write(key, endpoint, text)
+    except Exception:
+        pass
+    return {"text": text, "cache": ("miss" if use_cache else "live"), "endpoint": endpoint}

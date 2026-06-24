@@ -35,6 +35,14 @@
   .learn a svg{width:17px;height:17px;stroke:#34d399;fill:none;stroke-width:2;flex-shrink:0}
   .learn b{font-size:12.5px;display:block;line-height:1.2;font-weight:600}
   .learn .lsub{font-size:10px;color:#64748b}
+  /* AI cache on/off toggle (under Learn) — live vs cached on stage */
+  .cachetog{padding:0 12px 6px}
+  .cachetog button{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 10px;border-radius:9px;font-size:11.5px;font-weight:700;cursor:pointer;border:1px solid;background:transparent;transition:.12s;letter-spacing:.02em}
+  .cachetog .csub{font-size:9.5px;color:#64748b;text-align:center;margin-top:4px;line-height:1.3}
+  .cachetog button.cached{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.12)}
+  .cachetog button.cached:hover{background:rgba(251,191,36,.2)}
+  .cachetog button.live{color:#34d399;border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.12)}
+  .cachetog button.live:hover{background:rgba(52,211,153,.2)}
   .side .foot{padding:12px;border-top:1px solid rgba(255,255,255,.08)}
   .rbtn{width:100%;padding:9px;border-radius:8px;background:rgba(255,255,255,.08);color:#e2e8f0;border:1px solid rgba(255,255,255,.12);cursor:pointer;font-size:13px}
   .rbtn:hover{background:rgba(255,255,255,.16)}
@@ -201,6 +209,8 @@
     </a>
     <div class="nav" id="nav"></div>
     <div class="learn"><a id="learnLink" href="#learn"><svg viewBox="0 0 24 24"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg><span><b>Learn</b><span class="lsub">How reinsurance works</span></span></a></div>
+    <div class="cachetog"><button id="cacheBtn" onclick="toggleCache()">AI cache</button>
+      <div class="csub" id="cacheSub">cached = instant on stage</div></div>
     <div class="foot">
       <button class="rbtn" id="resetBtn">↺ Reset demo</button>
       <div class="disc"><b>About this demo.</b> Bricksurance Re and its cedants (incl. Bricksurance SE) are synthetic.
@@ -227,7 +237,15 @@ const $=(s)=>document.querySelector(s);
 const eur=(v)=>v==null?"—":"€"+Math.round(Number(v)).toLocaleString("en-GB");
 const eurm=(v)=>v==null?"—":"€"+(Number(v)/1e6).toLocaleString("en-GB",{maximumFractionDigits:1})+"m";
 const pct=(v)=>v==null?"—":Number(v).toLocaleString("en-GB",{minimumFractionDigits:1,maximumFractionDigits:1})+"%";
-async function api(p,opt){const r=await fetch("/api"+p,opt);return r.json();}
+// AI cache toggle — live vs cached on stage (per-request, like Solvency II). No TTL: entries are
+// permanent; live mode recomputes AND overwrites (recreating the cache), reset clears + re-warms.
+let CACHE_ON = (localStorage.getItem("re_cache")||"on")!=="off";
+async function api(p,opt){const sep=p.includes("?")?"&":"?";const r=await fetch("/api"+p+sep+"cache="+(CACHE_ON?1:0),opt);return r.json();}
+function renderCacheBtn(){const b=document.getElementById("cacheBtn"),s=document.getElementById("cacheSub");if(!b)return;
+  b.className=CACHE_ON?"cached":"live";
+  b.innerHTML=CACHE_ON?"🗄 AI: Cached":"📡 AI: Live";
+  if(s)s.textContent=CACHE_ON?"served from cache — instant on stage":"every call runs the agent live (and refreshes the cache)";}
+function toggleCache(){CACHE_ON=!CACHE_ON;localStorage.setItem("re_cache",CACHE_ON?"on":"off");renderCacheBtn();}
 // presenter strip — a one-liner of what the page shows, shown at the top of every page
 const present=(t)=>`<div class="present"><span class="ptag">On this page</span><span>${t}</span></div>`;
 
@@ -239,7 +257,7 @@ function renderNav(){let route=(location.hash||"#home").slice(1).split("/")[0];
   const ll=$("#learnLink");if(ll)ll.classList.toggle("on",route==='learn');}
 
 window.addEventListener("hashchange",route);
-async function boot(){CFG=await api("/config");route();}
+async function boot(){renderCacheBtn();CFG=await api("/config");route();}
 function route(){if(typeof closeModal==="function")closeModal();renderNav();const h=(location.hash||"#home").slice(1);const[r,arg]=h.split("/");
   ({home:landing,portfolio:portfolio,queue:queue,event:eventPage,intake:intake,ai:ai,governance:governance,learn:learn,sub:subView}[r]||landing)(arg);}
 

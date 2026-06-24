@@ -168,12 +168,18 @@ def whatif(sid: str, limit_eur: float = 30000000, attachment_eur: float = 200000
     return _struct(f"{config.fqn('fn_accumulation_whatif')}('{sql.esc(zid)}', {float(limit_eur)}, {float(attachment_eur)})")
 
 
+def _uc(cache):
+    # per-request cache override from the UI toggle (cache=1/0); falls back to the env default.
+    return config.USE_CACHE if cache is None else bool(cache)
+
+
 @app.get("/api/submission/{sid}/narrate")
-def narrate(sid: str, role: str = "supervisor"):
+def narrate(sid: str, role: str = "supervisor", cache: int = None):
+    uc = _uc(cache)
     # The supervisor box is the REAL tool-calling agent — it calls the UC functions itself.
     if role == "supervisor":
         out = agents.ask_agent(f"Should we bind submission {sid}? Give the call with quantified reasons.",
-                               custom_inputs={"submission_public_id": sid})
+                               custom_inputs={"submission_public_id": sid}, use_cache=uc)
         return {"text": out.get("text", ""), "cache": out.get("cache"), "tools": out.get("tools", []),
                 "endpoint": out.get("endpoint")}
     d = decision(sid)
@@ -187,17 +193,17 @@ def narrate(sid: str, role: str = "supervisor"):
          "dataquality": f"Assess the data quality for {sid}.",
          "portfolio": f"Propose a diversifying alternative to {sid}.",
          "counterparty": f"Flag counterparty risk on {sid}."}.get(role, f"Comment on {sid}.")
-    return agents.narrate(role_substr, q, d)
+    return agents.narrate(role_substr, q, d, use_cache=uc)
 
 
 # ─────────────────────────── Reinsurance AI — ask the real tool-calling agent ───────────────────────────
 @app.get("/api/agent/ask")
-def agent_ask(q: str, sid: str = "", eid: str = ""):
+def agent_ask(q: str, sid: str = "", eid: str = "", cache: int = None):
     ci = {}
     if sid: ci["submission_public_id"] = sid
     if eid: ci["event_public_id"] = eid
-    # interactive ask is always live (bypass cache) so the tool-call trace is real on screen
-    out = agents.ask_agent(q, custom_inputs=ci, use_cache=False)
+    # honours the AI-cache toggle: cached = instant on stage; live = runs the agent and shows the trace.
+    out = agents.ask_agent(q, custom_inputs=ci, use_cache=_uc(cache))
     return out
 
 
@@ -242,9 +248,9 @@ def event_treaties(eid: str):
 
 
 @app.get("/api/event/{eid}/narrate")
-def event_narrate(eid: str):
+def event_narrate(eid: str, cache: int = None):
     d = event_response(eid)
-    return agents.narrate(config.EP_EVENT_SUBSTR, f"Brief the CRO on event {eid}.", d)
+    return agents.narrate(config.EP_EVENT_SUBSTR, f"Brief the CRO on event {eid}.", d, use_cache=_uc(cache))
 
 
 # ─────────────────────────── intake (ADEPT/CDR vs manual + quarantine) ───────────────────────────
