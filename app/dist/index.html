@@ -87,18 +87,25 @@
   .askbox .go:hover{background:#f5f3ff}
   .askbox .ans{margin-top:14px;background:rgba(255,255,255,.97);border-radius:11px;padding:14px 16px;color:var(--ink)}
   .aitiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:10px}
-  .atile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s}
+  .atile{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:transform .12s,box-shadow .12s;text-decoration:none;color:var(--ink);display:flex;flex-direction:column}
   .atile:before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
-  .atile:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(15,23,42,.09)}
+  .atile:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(15,23,42,.13)}
   .atile .ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:12px}
   .atile .role{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
   .atile .nm{font-size:15px;display:block;margin-bottom:5px;font-weight:700;letter-spacing:-.01em}
-  .atile .d{font-size:12.5px;color:var(--mut);line-height:1.5}
+  .atile .d{font-size:12.5px;color:var(--mut);line-height:1.5;flex:1}
   .atile .ep{margin-top:11px;font-size:10px;color:#94a3b8;font-family:ui-monospace,SFMono-Regular,monospace;word-break:break-all}
-  .atile.k-supervisor:before{background:linear-gradient(90deg,#7c3aed,#a78bfa)}.atile.k-supervisor{border-color:#ddd6fe}.k-supervisor .ic{background:#f3e8ff;color:#7c3aed}.k-supervisor .role{color:#7c3aed}
-  .atile.k-agent:before{background:linear-gradient(90deg,#2563eb,#60a5fa)}.k-agent .ic{background:#dbeafe;color:#2563eb}.k-agent .role{color:#2563eb}
-  .atile.k-tool:before{background:linear-gradient(90deg,#16a34a,#4ade80)}.k-tool .ic{background:#dcfce7;color:#15803d}.k-tool .role{color:#15803d}
-  .atile.k-genie:before{background:linear-gradient(90deg,#ea580c,#fb923c)}.k-genie .ic{background:#ffedd5;color:#ea580c}.k-genie .role{color:#ea580c}
+  .atile .seelive{margin-top:11px;font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:4px}
+  .atile:hover .seelive{text-decoration:underline}
+  /* per-agent colour tones (solvency2-style) — accent bar, tinted card, coloured icon + label + link */
+  .tone-violet{border-color:#ddd6fe;background:#faf5ff}.tone-violet:before{background:linear-gradient(90deg,#7c3aed,#a78bfa)}.tone-violet .ic{background:#f3e8ff;color:#7c3aed}.tone-violet .role,.tone-violet .seelive{color:#7c3aed}
+  .tone-blue{border-color:#bfdbfe;background:#eff6ff}.tone-blue:before{background:linear-gradient(90deg,#2563eb,#60a5fa)}.tone-blue .ic{background:#dbeafe;color:#2563eb}.tone-blue .role,.tone-blue .seelive{color:#2563eb}
+  .tone-emerald{border-color:#bbf7d0;background:#f0fdf4}.tone-emerald:before{background:linear-gradient(90deg,#16a34a,#4ade80)}.tone-emerald .ic{background:#dcfce7;color:#15803d}.tone-emerald .role,.tone-emerald .seelive{color:#15803d}
+  .tone-amber{border-color:#fde68a;background:#fffbeb}.tone-amber:before{background:linear-gradient(90deg,#d97706,#fbbf24)}.tone-amber .ic{background:#fef3c7;color:#b45309}.tone-amber .role,.tone-amber .seelive{color:#b45309}
+  .tone-rose{border-color:#fecdd3;background:#fff1f2}.tone-rose:before{background:linear-gradient(90deg,#e11d48,#fb7185)}.tone-rose .ic{background:#ffe4e6;color:#e11d48}.tone-rose .role,.tone-rose .seelive{color:#e11d48}
+  .tone-orange{border-color:#fed7aa;background:#fff7ed}.tone-orange:before{background:linear-gradient(90deg,#ea580c,#fb923c)}.tone-orange .ic{background:#ffedd5;color:#ea580c}.tone-orange .role,.tone-orange .seelive{color:#ea580c}
+  .tone-cyan{border-color:#a5f3fc;background:#ecfeff}.tone-cyan:before{background:linear-gradient(90deg,#0891b2,#22d3ee)}.tone-cyan .ic{background:#cffafe;color:#0e7490}.tone-cyan .role,.tone-cyan .seelive{color:#0e7490}
+  .tone-slate{border-color:#cbd5e1;background:#f8fafc}.tone-slate:before{background:linear-gradient(90deg,#475569,#94a3b8)}.tone-slate .ic{background:#e2e8f0;color:#475569}.tone-slate .role,.tone-slate .seelive{color:#475569}
   .sech{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:22px 0 4px}
   .sech .cnt{color:#cbd5e1;font-weight:600}
   /* clickable tile affordance + provenance */
@@ -688,13 +695,16 @@ function aiIcon(n){if(AIGLYPH[n.kind])return AIGLYPH[n.kind];
 const AIROLE={supervisor:'Supervisor',agent:'Specialist agent',tool:'UC function',genie:'AI/BI Genie'};
 async function ai(){const m=$("#main");m.innerHTML='<div class="loading">Loading agents…</div>';
   const d=await api("/agents");
-  const tile=(n)=>`<div class="atile k-${n.kind}">
+  const tile=(n)=>{const ext=n.link&&/^https?:/.test(n.link);
+    const attr=n.link?`href="${n.link}"${ext?' target="_blank" rel="noopener"':''}`:'';
+    return `<a class="atile tone-${n.tone||'slate'}" ${attr}>
       <div class="ic">${aiIcon(n)}</div>
       <div class="role">${AIROLE[n.kind]||n.kind}</div>
       <span class="nm">${n.name}</span>
       <div class="d">${n.desc}</div>
       ${n.endpoint?`<div class="ep">↳ ${n.endpoint}</div>`:''}
-      ${n.space?`<div class="ep">↳ space ${n.space}</div>`:''}</div>`;
+      ${n.space?`<div class="ep">↳ space ${n.space}</div>`:''}
+      ${n.link?`<div class="seelive">→ ${n.link_label||'see it live'}${ext?' ↗':''}</div>`:''}</a>`;};
   const sup=d.nodes.filter(n=>n.kind==='supervisor'), ag=d.nodes.filter(n=>n.kind==='agent'),
         tools=d.nodes.filter(n=>n.kind==='tool'), genie=d.nodes.filter(n=>n.kind==='genie');
   const sec=(t,ns)=>ns.length?`<div class="sech">${t} <span class="cnt">· ${ns.length}</span></div><div class="aitiles">${ns.map(tile).join("")}</div>`:'';

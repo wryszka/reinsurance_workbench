@@ -523,19 +523,24 @@ def _pctf(v):
 # ─────────────────────────── agents roster ───────────────────────────
 @app.get("/api/agents")
 def agent_roster():
+    # tone = its own colour (solvency-style); link = where the node is actually used in the workbench.
+    host = config.workspace_host()
+    if host and not host.startswith("http"):
+        host = "https://" + host
+    genie_link = (f"{host}/genie/rooms/{config.GENIE_SPACE_ID}" if (host and config.GENIE_SPACE_ID) else "")
     nodes = [
-        {"kind": "supervisor", "name": "Reinsurance AI supervisor", "endpoint": config.resolve_endpoint(config.EP_SUPERVISOR_SUBSTR), "desc": "Composes the specialists into one recommendation. Narrates only — never binds."},
-        {"kind": "agent", "name": "Cat-Event Response", "endpoint": config.resolve_endpoint(config.EP_EVENT_SUBSTR), "desc": "On a live event, briefs the CRO on book-wide loss, capital hit and the most exposed cedant."},
-        {"kind": "agent", "name": "Portfolio Strategy", "endpoint": config.resolve_endpoint(config.EP_PORTFOLIO_SUBSTR), "desc": "Proposes a diversifying alternative when a deal saturates a peak zone."},
-        {"kind": "agent", "name": "Counterparty Credit", "endpoint": config.resolve_endpoint(config.EP_COUNTERPARTY_SUBSTR), "desc": "Injects the cedant credit + regulatory-watch signal into the decision."},
-        {"kind": "agent", "name": "Challenge / Second-Opinion", "endpoint": config.resolve_endpoint(config.EP_CHALLENGE_SUBSTR), "desc": "Argues the other side, quantified."},
-        {"kind": "agent", "name": "Data Quality", "endpoint": config.resolve_endpoint(config.EP_DATAQUALITY_SUBSTR), "desc": "Bordereaux / exposure completeness narrative."},
-        {"kind": "tool", "name": "fn_triage_submission", "desc": "Appetite decision (model)."},
-        {"kind": "tool", "name": "fn_price_submission", "desc": "Reinsurance pricing — RoL / burning cost / combined ratio (model)."},
-        {"kind": "tool", "name": "fn_accumulation_impact", "desc": "THE CRUX — marginal peak-zone PML vs appetite."},
-        {"kind": "tool", "name": "fn_capital_impact", "desc": "THE CRUX — marginal SCR vs expected return (RoRAC)."},
-        {"kind": "tool", "name": "fn_event_response", "desc": "Book-wide cat-event loss + capital impact in seconds."},
-        {"kind": "genie", "name": "Ask the Portfolio", "desc": "AI/BI Genie over the gold marts.", "space": config.GENIE_SPACE_ID},
+        {"kind": "supervisor", "name": "Reinsurance AI supervisor", "tone": "violet", "endpoint": config.resolve_endpoint(config.EP_SUPERVISOR_SUBSTR), "desc": "Composes the specialists into one recommendation. Narrates only — never binds.", "link": "#sub/sub:900002", "link_label": "see it call tools on the portfolio bomb"},
+        {"kind": "agent", "name": "Cat-Event Response", "tone": "orange", "endpoint": config.resolve_endpoint(config.EP_EVENT_SUBSTR), "desc": "On a live event, briefs the CRO on book-wide loss, capital hit and the most exposed cedant.", "link": "#event", "link_label": "see it on the Cat Event page"},
+        {"kind": "agent", "name": "Portfolio Strategy", "tone": "blue", "endpoint": config.resolve_endpoint(config.EP_PORTFOLIO_SUBSTR), "desc": "Proposes a diversifying alternative when a deal saturates a peak zone.", "link": "#sub/sub:900002", "link_label": "see its alternative on sub:900002"},
+        {"kind": "agent", "name": "Counterparty Credit", "tone": "rose", "endpoint": config.resolve_endpoint(config.EP_COUNTERPARTY_SUBSTR), "desc": "Injects the cedant credit + regulatory-watch signal into the decision.", "link": "#sub/sub:900002", "link_label": "see the counterparty panel"},
+        {"kind": "agent", "name": "Challenge / Second-Opinion", "tone": "amber", "endpoint": config.resolve_endpoint(config.EP_CHALLENGE_SUBSTR), "desc": "Argues the other side, quantified.", "link": "#sub/sub:900002", "link_label": "see it on sub:900002"},
+        {"kind": "agent", "name": "Data Quality", "tone": "emerald", "endpoint": config.resolve_endpoint(config.EP_DATAQUALITY_SUBSTR), "desc": "Bordereaux / exposure completeness narrative.", "link": "#intake", "link_label": "see it on the Ingestion page"},
+        {"kind": "tool", "name": "fn_triage_submission", "tone": "blue", "desc": "Appetite decision (model).", "link": "#sub/sub:900002", "link_label": "the Triage card"},
+        {"kind": "tool", "name": "fn_price_submission", "tone": "emerald", "desc": "Reinsurance pricing — RoL / burning cost / combined ratio (model).", "link": "#sub/sub:900002", "link_label": "the Price card"},
+        {"kind": "tool", "name": "fn_accumulation_impact", "tone": "rose", "desc": "THE CRUX — marginal peak-zone PML vs appetite.", "link": "#sub/sub:900002", "link_label": "the Accumulation card"},
+        {"kind": "tool", "name": "fn_capital_impact", "tone": "amber", "desc": "THE CRUX — marginal SCR vs expected return (RoRAC).", "link": "#sub/sub:900002", "link_label": "the Capital card"},
+        {"kind": "tool", "name": "fn_event_response", "tone": "orange", "desc": "Book-wide cat-event loss + capital impact in seconds.", "link": "#event", "link_label": "the Cat Event page"},
+        {"kind": "genie", "name": "Ask the Portfolio", "tone": "cyan", "desc": "AI/BI Genie over the gold marts — ask the book in natural language.", "space": config.GENIE_SPACE_ID, "link": genie_link, "link_label": "open the Genie space"},
     ]
     return {"nodes": nodes, "tagline": "Models price → agents reason → experts review → every decision audited. Agents escalate; humans bind."}
 
