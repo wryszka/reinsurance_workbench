@@ -165,6 +165,24 @@
   .startbanner .go{margin-left:auto;background:var(--blue);color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;font-size:13.5px;white-space:nowrap}
   .lfoot{text-align:center;font-size:11.5px;color:#94a3b8;margin:24px 0 8px;display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
   .lfoot a{color:#94a3b8;text-decoration:none}.lfoot a:hover{color:var(--blue)}
+  /* governance tabs + timeline */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 18px;flex-wrap:wrap}
+  .tabs .tab{padding:9px 14px;font-size:13px;font-weight:600;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs .tab:hover{color:var(--ink)}
+  .tabs .tab.on{color:var(--blue);border-bottom-color:var(--blue)}
+  .tier{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700}
+  .tier.Restricted{background:#fef2f2;color:#dc2626}.tier.Confidential{background:#fffbeb;color:#d97706}.tier.Internal{background:#eff6ff;color:#2563eb}.tier.Public{background:#f0fdf4;color:#16a34a}
+  .lens{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .lens span{font-size:11.5px;background:rgba(255,255,255,.1);color:#e0e7ff;border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:5px 11px}
+  .mono{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px}
+  .tl{padding-left:4px;margin-top:4px}
+  .tlitem{position:relative;padding:0 0 16px 22px;border-left:2px solid var(--line);margin-left:6px}
+  .tlitem:last-child{border-left-color:transparent;padding-bottom:0}
+  .tldot{position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;border:2px solid #fff}
+  .tlitem b{font-size:13px}
+  .tlitem p{font-size:12.5px;color:#475569;margin:3px 0 0;line-height:1.5}
+  .tlitem .src{font-size:10px;color:#94a3b8;font-family:ui-monospace,monospace;margin-top:3px;display:block}
+  .modelcard{border:1px solid var(--line);border-top:3px solid #6d28d9;border-radius:12px;padding:16px;background:#fff}
 </style>
 </head>
 <body>
@@ -703,38 +721,98 @@ async function askAgent(){const q=$("#ai-q").value;const o=$("#ai-a");o.innerHTM
     o.innerHTML=`<div class="ans"><div class="narr" style="margin:0"><span class="tag">Supervisor · live tool-calling</span>${r.text||'(no answer)'}</div>${tools}</div>`;}
   catch(e){o.innerHTML='<div class="ans"><span class="muted">agent unavailable</span></div>';}}
 
-// ─────────── Governance ───────────
-async function governance(){const m=$("#main");m.innerHTML='<div class="loading">Loading governance…</div>';
-  const d=await api("/governance/inventory");
-  const inv=d.inventory.map(r=>`<tr><td><b>${r.table_name}</b></td><td>${r.fields}</td><td><span class="pill ${r.sensitivity_tier==='Restricted'?'red':r.sensitivity_tier==='Confidential'?'amber':'green'}">${r.sensitivity_tier}</span></td><td>${r.retention}</td><td class="muted">${r.used_for}</td></tr>`).join("");
-  const cp=d.counterparties.map(r=>`<tr><td>${r.cedant_name}</td><td>${r.domicile}</td><td><span class="pill green">${r.sanctions_status}</span></td><td><span class="pill ${r.esg_status==='amber'?'amber':'green'}">${r.esg_status}</span></td></tr>`).join("");
-  const sv=d.solvency&&d.solvency[0]||{};
-  m.innerHTML=`<div class="eyebrow">Governance — Unity Catalog</div><h1>What's collected, who can see it, how decisions are made</h1>
-    <p class="sub">Real Unity Catalog governance: lineage captured from the pipeline, dynamic column masking, sensitivity tiers, and a live submission-to-bind audit trail.</p>
-    ${present('What we collect and how it is protected — data inventory with sensitivity tiers and dynamic masking, counterparty checks, the decision audit trail, and real Unity Catalog lineage.')}
-    <div class="card"><h3>Data inventory & sensitivity tiers</h3><table><thead><tr><th>Table</th><th>Fields</th><th>Sensitivity</th><th>Retention</th><th>Used for</th></tr></thead><tbody>${inv}</tbody></table></div>
-    <div class="grid g2" style="margin-top:16px">
-      <div class="card" id="lineage-card"><h3>UC lineage</h3><span class="muted">loading…</span></div>
-      <div class="card" id="mask-card"><h3>Dynamic data masking (UC column mask)</h3><span class="muted">loading…</span></div>
-    </div>
-    <div class="grid g2" style="margin-top:16px">
-      <div class="card"><h3>Sanctions / ESG screening</h3><table><thead><tr><th>Cedant</th><th>Domicile</th><th>Sanctions</th><th>ESG</th></tr></thead><tbody>${cp}</tbody></table></div>
-      <div class="card"><h3>Capital / Solvency II cross-link</h3><div class="kv"><span>Solvency II ratio</span><b>${pct(sv.solvency_ratio_pct)}</b></div><div class="kv"><span>Diversified BSCR</span><b>${eurm(sv.diversified_bscr_eur)}</b></div><div class="muted" style="margin-top:8px">${sv.note||''} <i>(illustrative factor model — integrates the capital engine in production)</i></div></div>
-    </div>
-    <div class="card" style="margin-top:16px"><h3>Decision audit — live capture</h3>
-      <div class="muted" style="font-size:12px">Every decision logged on the Work-a-submission page lands here (MERGE into <code>gov_decision_audit</code>). The trail is the artifact.</div>
-      <div id="auditAll" style="margin-top:10px"><span class="muted">loading…</span></div></div>`;
+// ─────────── Governance (tabbed) ───────────
+let GOV_TAB='collect', GOV_TRACK='sub:900002';
+function setGovTab(t){GOV_TAB=t;governance();}
+const tBool=(v)=>v===true||v==='true';
+function governance(){const m=$("#main");
+  const tab=(k,l)=>`<div class="tab ${GOV_TAB===k?'on':''}" onclick="setGovTab('${k}')">${l}</div>`;
+  m.innerHTML=`<div class="eyebrow">Governance — Unity Catalog</div><h1>What we collect, who sees it, how every decision is made</h1>
+    <p class="sub">One governed copy of the data, surfaced many ways by role. Real UC lineage and masking, the model registry, the AI activity trail, and the full track of any deal — the regulator-readable view.</p>
+    ${present('What we collect and how it is governed — the data inventory and who-sees-what, the model versions, the AI activity audit, and the end-to-end track of any submission or event.')}
+    <div class="tabs">${tab('collect','🗂️ What we collect')}${tab('decisions','⚖️ Decisions & audit')}${tab('ai','🤖 Models & AI activity')}${tab('track','📋 Deal track')}</div>
+    <div id="govbody"><div class="loading">Loading…</div></div>`;
+  ({collect:govCollect,decisions:govDecisions,ai:govAI,track:govTrack}[GOV_TAB]||govCollect)();}
+
+async function govCollect(){const el=$("#govbody");const d=await api("/governance/inventory");
+  const tier=t=>`<span class="tier ${t}">${t}</span>`;
+  const inv=(d.inventory||[]).map(r=>`<tr><td class="mono"><b>${r.table_name}</b></td><td class="muted">${r.fields}</td><td>${tier(r.sensitivity_tier)}</td><td class="muted">${r.surfaced_as||r.used_for||''}</td><td class="muted">${r.audience||''}</td><td class="muted">${r.retention}</td></tr>`).join("");
+  el.innerHTML=`
+   <div class="card" style="background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;border:0">
+     <div class="eyebrow" style="color:#c4b5fd">The governance story</div>
+     <div style="font-size:16px;font-weight:700;margin-top:4px">We collect everything once — then surface it the way each person needs.</div>
+     <p style="color:#cbd5e1;margin:7px 0 0;font-size:13px;line-height:1.6">One governed copy in Unity Catalog. The same submission becomes a raw slip for the underwriter, structured data for pricing, a peak-zone PML for the CRO, features for the models, a tool for the agents, and plain language for anyone via Genie — each role sees only what it needs, masked where it must be.</p>
+     <div class="lens"><span>📄 Raw slip · Document AI</span><span>🧱 Silver / structured</span><span>📊 Gold marts · CRO</span><span>🧮 ML features</span><span>🛠 Agent tools</span><span>💬 Genie · natural language</span><span>🛡 Regulator · lineage</span></div></div>
+   <div class="card" style="margin-top:16px"><h3>Data inventory — what's collected, the tier, and who sees it</h3>
+     <table><thead><tr><th>Table</th><th>Fields</th><th>Tier</th><th>Surfaced as</th><th>Audience</th><th>Retention</th></tr></thead><tbody>${inv}</tbody></table>
+     <div class="muted" style="font-size:11.5px;margin-top:8px">Tiers — ${tier('Restricted')} peak-zone book, vendor curves, credit &amp; audit · ${tier('Confidential')} submissions, bordereaux, exposure · ${tier('Internal')} derived marts. Sensitivity tags are applied to the source tables in Unity Catalog; retention per row.</div></div>
+   <div class="grid g2" style="margin-top:16px">
+     <div class="card" id="g-lineage"><h3>UC lineage — captured from the pipeline</h3><span class="muted">loading…</span></div>
+     <div class="card" id="g-mask"><h3>Dynamic column masking — enforced by UC, not the app</h3><span class="muted">loading…</span></div></div>`;
   api("/governance/lineage").then(l=>{
-    const body=l.edges?`<table><thead><tr><th>Source</th><th>→ Target</th></tr></thead><tbody>${l.edges.slice(0,20).map(e=>`<tr><td class="muted">${e.source_table_name}</td><td><b>${e.target_table_name}</b></td></tr>`).join('')}</tbody></table>`
+    const body=l.edges?`<table><thead><tr><th>Source</th><th>→ Target</th></tr></thead><tbody>${l.edges.slice(0,18).map(e=>`<tr><td class="muted mono" style="font-size:11px">${e.source_table_name}</td><td class="mono" style="font-size:11px"><b>${e.target_table_name}</b></td></tr>`).join('')}</tbody></table>`
       :`<div style="margin:6px 0">${(l.layers||[]).map(e=>`<div class="kv"><span class="muted">${e[0]}</span><b>→ ${e[1]}</b></div>`).join('')}</div><div class="muted" style="font-size:11px">${(l.tables||[]).length} governed UC objects in this schema</div>`;
-    $("#lineage-card").innerHTML=`<h3>UC lineage</h3>${body}<div class="muted" style="font-size:11px;margin-top:6px">${l.source}</div>`;}).catch(()=>{$("#lineage-card").innerHTML='<h3>UC lineage</h3><span class="muted">unavailable</span>';});
+    $("#g-lineage").innerHTML=`<h3>UC lineage — captured from the pipeline</h3>${body}<div class="muted" style="font-size:11px;margin-top:6px">↳ ${l.source}</div>`;}).catch(()=>{$("#g-lineage").innerHTML='<h3>UC lineage</h3><span class="muted">unavailable</span>';});
   api("/governance/masking").then(mk=>{
     const rows=(mk.rows||[]).map(r=>`<tr><td>${r.cedant_name}</td><td>${r.rating}</td><td>${r.one_year_pd_pct}</td><td class="muted">${r.watch_note}</td></tr>`).join('');
-    $("#mask-card").innerHTML=`<h3>Dynamic data masking (UC column mask)</h3><table><thead><tr><th>Cedant</th><th>Rating</th><th>1-yr PD</th><th>Watch note</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="note" style="font-size:11.5px">${mk.note}</div><div class="muted" style="font-size:10.5px;margin-top:4px"><code>${mk.rule}</code></div>`;}).catch(()=>{$("#mask-card").innerHTML='<h3>Dynamic data masking</h3><span class="muted">unavailable</span>';});
-  api("/governance/audit").then(d=>{
-    const rows=(d.audit||[]).map(r=>`<tr><td><b>${r.submission_public_id}</b></td><td><span class="pill ${r.recommendation==='recommend-to-bind'?'green':r.recommendation==='decline'?'red':'amber'}">${r.recommendation}</span></td><td>${r.bound==='true'||r.bound===true?'<span class="pill green">BOUND</span>':'—'}</td><td class="muted">${r.decided_by}</td><td class="muted">${(r.decision_ts||'').slice(0,16)}</td></tr>`).join('')||'<tr><td colspan=5 class="muted">no decisions yet — log one on a submission</td></tr>';
-    $("#auditAll").innerHTML=`<table><thead><tr><th>Submission</th><th>Recommendation</th><th>Bound</th><th>By</th><th>When</th></tr></thead><tbody>${rows}</tbody></table>`;}).catch(()=>{});}
+    $("#g-mask").innerHTML=`<h3>Dynamic column masking — enforced by UC, not the app</h3><table><thead><tr><th>Cedant</th><th>Rating</th><th>1-yr PD</th><th>Watch note</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="note" style="font-size:11.5px">${mk.note}</div><div class="muted" style="font-size:10.5px;margin-top:4px"><code>${mk.rule}</code></div>`;}).catch(()=>{$("#g-mask").innerHTML='<h3>Dynamic column masking</h3><span class="muted">unavailable</span>';});}
+
+async function govDecisions(){const el=$("#govbody");
+  const [au,inv]=await Promise.all([api("/governance/audit"),api("/governance/inventory")]);
+  const rows=(au.audit||[]).map(r=>`<tr class="click" onclick="GOV_TRACK='${r.submission_public_id}';setGovTab('track')">
+    <td><b>${r.submission_public_id}</b></td><td><span class="pill ${r.recommendation==='recommend-to-bind'?'green':r.recommendation==='decline'?'red':'amber'}">${r.recommendation}</span></td>
+    <td>${(r.triage_decision||'').replace('_',' ')}</td><td>${tBool(r.breaches_appetite)?'<span class="pill red">breach</span>':'—'}</td>
+    <td>${tBool(r.capital_destructive)?'<span class="pill red">destructive</span>':'<span class="pill green">accretive</span>'}</td>
+    <td>${tBool(r.bound)?'<span class="pill green">BOUND</span>':'—'}</td><td class="muted">${r.decided_by}</td><td class="muted">${(r.decision_ts||'').slice(0,16)}</td></tr>`).join('')||'<tr><td colspan=8 class="muted">no decisions logged yet — log one on the Work-a-submission page</td></tr>';
+  const cp=(inv.counterparties||[]).map(r=>`<tr><td>${r.cedant_name}</td><td>${r.domicile}</td><td><span class="pill green">${r.sanctions_status}</span></td><td><span class="pill ${r.esg_status==='amber'?'amber':'green'}">${r.esg_status}</span></td><td class="muted" style="font-size:11px">${r.sanctions_source}</td></tr>`).join("");
+  const sv=inv.solvency&&inv.solvency[0]||{};
+  el.innerHTML=`<div class="card"><h3>Submission-to-bind audit trail <span class="muted" style="font-size:11px;text-transform:none">— every decision, MERGEd live into gov_decision_audit</span></h3>
+     <table><thead><tr><th>Submission</th><th>Recommendation</th><th>Triage</th><th>Appetite</th><th>Capital</th><th>Bound</th><th>By</th><th>When</th></tr></thead><tbody>${rows}</tbody></table>
+     <div class="muted" style="font-size:11.5px;margin-top:8px">Click a row to see the full deal track. Decisions are written from the Work-a-submission page (MERGE into <code>gov_decision_audit</code>) — the trail is the artifact a regulator asks for.</div></div>
+   <div class="grid g2" style="margin-top:16px">
+     <div class="card"><h3>Sanctions / ESG screening</h3><table><thead><tr><th>Cedant</th><th>Domicile</th><th>Sanctions</th><th>ESG</th><th>Source</th></tr></thead><tbody>${cp}</tbody></table></div>
+     <div class="card"><h3>Capital / Solvency II cross-link</h3><div class="kv"><span>Solvency II ratio</span><b>${pct(sv.solvency_ratio_pct)}</b></div><div class="kv"><span>Diversified BSCR</span><b>${eurm(sv.diversified_bscr_eur)}</b></div><div class="kv"><span>Eligible own funds</span><b>${eurm(sv.eligible_own_funds_eur)}</b></div><div class="muted" style="margin-top:8px">${sv.note||''} <i>(illustrative factor model — integrates the capital engine in production)</i></div></div></div>`;}
+
+async function govAI(){const el=$("#govbody");
+  const [md,ros,act]=await Promise.all([api("/governance/models"),api("/agents"),api("/governance/ai-activity")]);
+  const models=(md.models||[]).map(m=>m.error?`<div class="modelcard"><h3 style="margin:0">${m.label}</h3><span class="muted">unavailable</span></div>`:`<div class="modelcard">
+     <div class="eyebrow" style="color:#6d28d9">Registered model</div><b style="font-size:14px">${m.label}</b>
+     <div class="mono muted" style="font-size:10.5px;margin:3px 0 8px">${m.full_name}</div>
+     <div class="kv"><span>Champion version</span><b>v${m.champion_version} <span class="pill green">@champion</span></b></div>
+     <div class="kv"><span>Total versions</span><b>${m.versions} (latest v${m.latest_version})</b></div>
+     <div class="kv"><span>Registered</span><b>${m.created_at||'—'}</b></div>
+     <div class="kv"><span>Serving endpoint</span><b class="mono" style="font-size:11px">${m.endpoint}</b></div>
+     <div class="muted" style="font-size:11px;margin-top:6px">${m.role}</div></div>`).join("");
+  const ag=(ros.nodes||[]).filter(n=>n.kind==='supervisor'||n.kind==='agent').map(n=>`<tr><td><b>${n.name}</b></td><td class="muted">${n.kind}</td><td class="mono" style="font-size:10.5px">${n.endpoint||'—'}</td><td class="muted">${n.desc}</td></tr>`).join("");
+  const acts=(act.activity||[]).map(a=>`<tr><td><b>${a.subject_id}</b></td><td>${a.agent_name}</td><td><span class="pill ${a.signal==='REFER'||a.signal==='DESTRUCTIVE'?'red':a.signal==='RECOMMEND-TO-BIND'||a.signal==='CLEAR'||a.signal==='OK'||a.signal==='CONCUR'?'green':'amber'}">${a.signal}</span></td><td class="mono muted" style="font-size:10.5px">${a.tools_used}</td><td style="font-size:12px">${a.reasoning_text}</td></tr>`).join("");
+  el.innerHTML=`<div class="card"><h3>Model governance — Unity Catalog Model Registry</h3>
+     <div class="grid g2" style="margin-top:4px">${models}</div>
+     <div class="muted" style="font-size:11.5px;margin-top:10px">${md.note||''}</div></div>
+   <div class="card" style="margin-top:16px"><h3>The governed agent roster</h3>
+     <table><thead><tr><th>Agent</th><th>Kind</th><th>Serving endpoint (Mosaic AI)</th><th>Role</th></tr></thead><tbody>${ag}</tbody></table>
+     <div class="muted" style="font-size:11.5px;margin-top:8px">Each agent is an independently deployable, MLflow-traced serving endpoint. The supervisor is a real tool-calling agent; specialists narrate. <b>No agent has bind authority</b> — a human decides.</div></div>
+   <div class="card" style="margin-top:16px"><h3>AI activity &amp; reasoning audit <span class="muted" style="font-size:11px;text-transform:none">— what each agent contributed to each decision (gov_ai_activity)</span></h3>
+     <table><thead><tr><th>Deal</th><th>Agent</th><th>Signal</th><th>UC-function tools used</th><th>Reasoning</th></tr></thead><tbody>${acts}</tbody></table>
+     <div class="muted" style="font-size:11.5px;margin-top:8px">The explainability layer: for any decision, exactly which agent looked at it, the UC-function tools it called, and what it concluded. The live tool-calling agent that produces these is on the <a class="lnk" href="#ai">Reinsurance AI</a> page.</div></div>`;}
+
+async function govTrack(){const el=$("#govbody");
+  el.innerHTML=`<div class="card"><h3>📋 Track any deal, end to end</h3>
+     <div class="muted" style="font-size:12.5px;margin-bottom:10px">The whole governed story in one place — how it arrived, what we extracted, how it was triaged, priced and tested for accumulation and capital, which agents weighed in, and the decision logged. Assembled live from the real Unity Catalog tables and functions.</div>
+     <div style="display:flex;gap:8px"><input id="trk" placeholder="Submission e.g. sub:900002, or event evt:900001" value="${GOV_TRACK}" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px" onkeydown="if(event.key==='Enter')doTrack()"><button class="btn" onclick="doTrack()">Track →</button></div>
+     <div style="margin-top:9px">${['sub:900002','sub:900001','evt:900001'].map(c=>`<span class="pill ${c==='sub:900002'?'red':c==='sub:900001'?'green':'amber'}" style="cursor:pointer;margin:2px 4px 0 0" onclick="GOV_TRACK='${c}';doTrack()">${c}</span>`).join('')}</div></div>
+   <div id="trkbody" style="margin-top:16px"></div>`;
+  doTrack();}
+async function doTrack(){const i=$("#trk");if(i)GOV_TRACK=(i.value||'').trim()||GOV_TRACK;const b=$("#trkbody");if(!b)return;b.innerHTML='<div class="loading">Assembling the governed lifecycle…</div>';
+  let d;try{d=await api("/governance/track?id="+encodeURIComponent(GOV_TRACK));}catch(e){b.innerHTML='<span class="muted">unavailable</span>';return;}
+  if(!d.found){b.innerHTML=`<div class="card">No deal <b>${GOV_TRACK}</b> found.</div>`;return;}
+  const SC={done:'#16a34a',missing:'#dc2626',awaited:'#d97706'};
+  const tl=(d.stages||[]).map(s=>`<div class="tlitem"><div class="tldot" style="background:${SC[s.status]||'#94a3b8'}"></div><b>${s.stage}</b><p>${s.detail}</p><span class="src">↳ ${s.source}</span></div>`).join("");
+  const ag=(d.agents||[]).map(a=>`<div style="border-bottom:1px solid #f1f5f9;padding:9px 0"><b style="font-size:12.5px">${a.agent_name}</b> <span class="pill ${a.signal==='REFER'||a.signal==='DESTRUCTIVE'?'red':a.signal==='RECOMMEND-TO-BIND'||a.signal==='CLEAR'||a.signal==='OK'||a.signal==='CONCUR'?'green':'amber'}" style="margin-left:4px">${a.signal}</span><p style="font-size:12.5px;color:#475569;margin:4px 0 0">${a.reasoning_text}</p><span class="src" style="font-size:10px;color:#94a3b8">🛠 ${a.tools_used}</span></div>`).join('')||'<span class="muted">no agent activity recorded</span>';
+  b.innerHTML=`<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px"><div><div class="eyebrow">${d.kind}</div><div style="font-size:18px;font-weight:800">${d.title}</div><div class="muted">${d.subtitle||''}</div></div></div>
+    <div class="grid g2">
+      <div class="card"><h3>Governed lifecycle</h3><div class="tl">${tl}</div></div>
+      <div class="card"><h3>What the AI contributed</h3>${ag}</div></div>`;}
 
 // ─────────── Learn ───────────
 // ─────────── Learn — Reinsurance 101 (slide deck) ───────────

@@ -58,19 +58,23 @@ print("decision audit seeded + fn_decision_audit created")
 
 # COMMAND ----------
 
+# The "collect once, surface many ways by role" story: every source has a sensitivity tier AND an explicit
+# record of WHERE it is surfaced in the workbench and FOR WHOM — one governed copy, many role-specific lenses.
 inv = [
-    # table, fields, source, tier, pii, retention, used_for
-    ("landing_submissions", "cedant, broker, structure, layers, RoL, perils", "ADEPT/CDR + manual", "Confidential", False, "7y", "Triage + pricing"),
-    ("landing_premium_bordereaux", "GWP, risk counts by year", "Cedant bordereaux", "Confidential", False, "7y", "Rate adequacy"),
-    ("landing_loss_bordereaux", "incurred, paid, peril, as-if", "Cedant bordereaux", "Confidential", False, "10y", "Loss history / burning cost"),
-    ("landing_exposure", "TIV, locations, zone", "Cedant exposure", "Confidential", False, "7y", "Accumulation"),
-    ("cat_vendor_curves", "EP curves PML/AEP/OEP (3 vendors)", "External cat vendors", "Restricted", False, "perpetual", "Accumulation + capital (blended; engine abstracted)"),
-    ("inforce_treaties", "in-force book, ceded premium, PML contrib", "Internal", "Restricted", False, "perpetual", "Portfolio accumulation"),
-    ("counterparties", "credit rating, PD, credit quality step", "Rating agencies", "Restricted", False, "perpetual", "Counterparty / credit"),
-    ("gov_decision_audit", "decision trail, recommendation, bind", "Internal", "Restricted", False, "10y", "Governance / regulator"),
+    # table, fields, source, tier, pii, retention, used_for, surfaced_as, audience
+    ("landing_submissions", "cedant, broker, structure, layers, RoL, perils", "ADEPT/CDR + manual", "Confidential", False, "7y", "Triage + pricing", "Renewal Desk grid · Document-AI slip view · pricing tool", "Underwriters, pricing actuaries"),
+    ("landing_mrc_extractions", "Document-AI extracted slip fields + confidence", "Unstructured MRC slips", "Confidential", False, "7y", "Auto-extract → triage + pricing", "Ingestion ▸ Document AI panel", "Underwriters"),
+    ("landing_premium_bordereaux", "GWP, risk counts by year", "Cedant bordereaux", "Confidential", False, "7y", "Rate adequacy", "Ingestion feed map · pricing inputs", "Pricing actuaries"),
+    ("landing_loss_bordereaux", "incurred, paid, peril, as-if", "Cedant bordereaux", "Confidential", False, "10y", "Loss history / burning cost", "Pricing burning-cost · experience rating", "Pricing actuaries"),
+    ("landing_exposure", "TIV, locations, zone", "Cedant exposure", "Confidential", False, "7y", "Accumulation", "Geospatial H3 accumulation · CRO peak-zone PML", "Cat managers, CRO"),
+    ("cat_vendor_curves", "EP curves PML/AEP/OEP (3 vendors)", "External cat vendors", "Restricted", False, "perpetual", "Accumulation + capital (blended)", "Control Tower vendor-divergence · accumulation drill", "Cat managers, CRO"),
+    ("inforce_treaties", "in-force book, ceded premium, PML contribution", "Internal book of record", "Restricted", False, "perpetual", "Portfolio accumulation", "Control Tower zone drill · marginal accumulation", "CRO, capital team"),
+    ("counterparties", "credit rating, PD, credit quality step, watch note", "Rating agencies", "Restricted", False, "perpetual", "Counterparty / credit (PD masked)", "Counterparty panel (PD masked) · sanctions screen", "Credit risk, compliance"),
+    ("gold_event_response", "event loss, reinstatements, solvency hit", "Derived from in-force book", "Internal", False, "10y", "Cat-event response", "Cat Event page · Deal track", "CRO, capital team"),
+    ("gov_decision_audit", "decision trail, recommendation, bind, who/when", "Internal", "Restricted", False, "10y", "Governance / regulator", "Governance ▸ Decisions · Deal track", "Compliance, regulator, internal audit"),
 ]
 spark.createDataFrame(inv, "table_name string, fields string, source string, sensitivity_tier string, "
-                      "contains_pii boolean, retention string, used_for string") \
+                      "contains_pii boolean, retention string, used_for string, surfaced_as string, audience string") \
     .write.mode("overwrite").saveAsTable(f"{fqn}.gov_data_inventory")
 
 # Apply sensitivity tier tags (best-effort — governed tag policies may block).
@@ -81,6 +85,37 @@ for t, tier in TIER.items():
     except Exception as e:
         print(f"tag skip {t}: {str(e)[:60]}")
 print("data inventory + sensitivity tags written")
+
+# COMMAND ----------
+
+# MAGIC %md ## AI activity / agent-reasoning audit — the governed record of what each agent contributed
+# MAGIC The explainability layer for a regulator: which agent looked at each decision, the UC-function tools it
+# MAGIC called, and the signal it returned. Derived from the deterministic UC-function outputs + the agent roster
+# MAGIC (the live tool-calling agent that produces these is on the Reinsurance AI page).
+
+# COMMAND ----------
+
+act = [
+    # subject_id, subject_kind, agent_name, agent_role, tools_used, signal, reasoning_text
+    ("sub:900002", "submission", "Reinsurance AI supervisor", "supervisor", "fn_triage_submission, fn_price_submission, fn_accumulation_impact, fn_capital_impact, fn_recommendation", "REFER", "Attractive standalone (56% combined) but binding it adds 28.7m of windstorm PML into a peak zone already at 97.6% of appetite — breaches appetite by 16.7m and RoRAC of 8.7% sits below the 15% hurdle. Refer, do not bind."),
+    ("sub:900002", "submission", "Challenge / Second-Opinion", "challenge", "fn_accumulation_impact, fn_capital_impact", "REFER", "Stress-tested the other side: even resized smaller the marginal capital stays destructive and the deal is correlated with three in-force EU-windstorm treaties. The diversification argument does not hold here."),
+    ("sub:900002", "submission", "Portfolio Strategy", "portfolio", "fn_portfolio_alternative", "ALTERNATIVE", "Capacity is better spent on US Atlantic hurricane (~19.5% RoRAC) where the book has headroom — same premium, accretive instead of destructive."),
+    ("sub:900002", "submission", "Counterparty Credit", "counterparty", "counterparties, gov_counterparty_secure", "CLEAR", "Helvetia Mutual AA-, credit quality step 1, no sanctions hit and no regulatory-watch flag. Counterparty is not the issue — the accumulation is."),
+    ("sub:900002", "submission", "Data Quality", "dataquality", "gold_dq_scorecard", "OK", "Slip extracted at high confidence; exposure and bordereaux complete, nothing quarantined. The numbers can be trusted."),
+    ("sub:900001", "submission", "Reinsurance AI supervisor", "supervisor", "fn_triage_submission, fn_price_submission, fn_accumulation_impact, fn_capital_impact, fn_recommendation", "RECOMMEND-TO-BIND", "Clean motor quota share, in appetite, adequate price (94% combined), ~zero marginal peak-zone accumulation and RoRAC ~23% — accretive. Recommend to bind; quote and move on."),
+    ("sub:900001", "submission", "Challenge / Second-Opinion", "challenge", "fn_accumulation_impact, fn_capital_impact", "CONCUR", "No peak-cat accumulation and the deal diversifies the book. No objection to binding."),
+    ("sub:900001", "submission", "Portfolio Strategy", "portfolio", "fn_portfolio_alternative", "CONCUR", "Diversifies away from the windstorm peak — a good use of capacity."),
+    ("sub:900001", "submission", "Counterparty Credit", "counterparty", "counterparties, gov_counterparty_secure", "CLEAR", "Bricksurance SE, investment grade, clean on sanctions and watch lists."),
+    ("sub:900001", "submission", "Data Quality", "dataquality", "gold_dq_scorecard", "OK", "ADEPT/CDR clean feed, complete submission — no data-quality concerns."),
+    ("evt:900001", "event", "Cat-Event Response", "event", "fn_event_response, fn_event_treaty_detail", "BRIEF", "Windstorm Eckhart, NW Europe: 22 treaties respond, gross 150m, net 133m after 17m reinstatement income. Most exposed cedant Helvetia at 50m. Solvency II 181% to 141% — above the 100% floor."),
+]
+from pyspark.sql import functions as _F
+spark.createDataFrame([(f"AIA-{i+1:03d}", *r) for i, r in enumerate(act)],
+    "activity_id string, subject_id string, subject_kind string, agent_name string, agent_role string, "
+    "tools_used string, signal string, reasoning_text string") \
+    .withColumn("created_ts", _F.current_timestamp()) \
+    .write.mode("overwrite").saveAsTable(f"{fqn}.gov_ai_activity")
+print("gov_ai_activity seeded:", spark.table(f"{fqn}.gov_ai_activity").count(), "rows")
 
 # COMMAND ----------
 

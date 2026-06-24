@@ -386,6 +386,140 @@ def gov_masking():
             "note": "Enforced by Unity Catalog on the governed view gov_counterparty_secure. This app's service principal is outside the privileged group, so PD and watch notes are redacted here — by UC, not by the app."}
 
 
+# ─────────────────────────── model governance (real MLflow registry) ───────────────────────────
+def _ms_to_date(ms):
+    try:
+        import datetime
+        return datetime.datetime.utcfromtimestamp(int(ms) / 1000).strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
+@app.get("/api/governance/models")
+def gov_models():
+    w = config.get_workspace_client()
+    cat, sch = config.CATALOG, config.SCHEMA
+    out = []
+    for nm, label, ep, kind in [
+        ("model_triage_classifier", "Triage classifier", "reinsurance-triage", "Appetite decision — in/out, fast-track vs refer"),
+        ("model_loss_ratio", "Pricing — loss-ratio / burning cost", "reinsurance-pricing", "Technical price — predicted loss ratio (not a GLM)")]:
+        full = f"{cat}.{sch}.{nm}"
+        try:
+            vers = list(w.model_versions.list(full_name=full))
+            latest = max((int(v.version) for v in vers), default=None)
+            champ = None
+            try:
+                champ = str(w.model_versions.get_by_alias(full_name=full, alias="champion").version)
+            except Exception:
+                champ = str(latest) if latest else None
+            created = next((_ms_to_date(getattr(v, "created_at", None)) for v in vers if str(v.version) == str(latest)), None)
+            out.append({"name": nm, "full_name": full, "label": label, "role": kind,
+                        "endpoint": config.resolve_endpoint(ep), "versions": len(vers),
+                        "latest_version": latest, "champion_version": champ, "created_at": created, "status": "READY"})
+        except Exception as e:
+            out.append({"name": nm, "label": label, "role": kind, "error": str(e)[:120]})
+    return {"models": out,
+            "note": "Registered in the Unity Catalog Model Registry and served scale-to-zero via Mosaic AI Model Serving. The @champion alias is the exact version the pricing and triage cards call — so a decision can always be tied to the model version that produced it."}
+
+
+# ─────────────────────────── AI activity / agent-reasoning audit ───────────────────────────
+@app.get("/api/governance/ai-activity")
+def gov_ai_activity_route(id: str = ""):
+    where = f"WHERE subject_id='{sql.esc(id)}'" if id else ""
+    return {"activity": sql.query(f"""SELECT subject_id, subject_kind, agent_name, agent_role, tools_used, signal,
+        reasoning_text, CAST(created_ts AS STRING) created_ts FROM {config.fqn('gov_ai_activity')} {where}
+        ORDER BY subject_id, activity_id""")}
+
+
+# ─────────────────────────── deal track — full governed lifecycle of one deal ───────────────────────────
+def _m(v):
+    try:
+        return "€" + format(round(float(v) / 1e6, 1), ",") + "m"
+    except Exception:
+        return "—"
+
+
+@app.get("/api/governance/track")
+def gov_track(id: str):
+    s = sql.esc(id)
+    agents = sql.query(f"""SELECT agent_name, signal, tools_used, reasoning_text FROM {config.fqn('gov_ai_activity')}
+        WHERE subject_id='{s}' ORDER BY activity_id""")
+    if id.startswith("evt:"):
+        ev = _struct(f"{config.fqn('fn_event_response')}('{s}')")
+        if not ev:
+            return {"found": False, "id": id}
+        stages = [
+            {"stage": "Footprint ingested", "status": "done", "source": "bronze_event_footprint",
+             "detail": f"{ev.get('event_name')} — {ev.get('region')}, 1-in-{ev.get('return_period')}. Vendor event footprint ingested as JSON."},
+            {"stage": "Treaties matched", "status": "done", "source": "fn_event_treaty_detail",
+             "detail": f"{ev.get('n_treaties_responding')} in-force treaties respond, by attachment, limit and footprint."},
+            {"stage": "Loss computed", "status": "done", "source": "fn_event_response",
+             "detail": f"Gross {_m(ev.get('gross_loss_eur'))}, − reinstatement {_m(ev.get('reinstatement_premium_eur'))} = net {_m(ev.get('net_loss_eur'))}. Most exposed: {ev.get('top_cedant')} {_m(ev.get('top_cedant_loss_eur'))}."},
+            {"stage": "Capital impact", "status": "done", "source": "fn_event_response + gold_capital_position",
+             "detail": f"Solvency II {ev.get('solvency_before_pct')}% → {ev.get('solvency_after_pct')}% — above the 100% floor."},
+            {"stage": "CRO briefed", "status": "done", "source": "Cat-Event agent",
+             "detail": "Book-wide response assembled and briefed in seconds."},
+        ]
+        return {"found": True, "kind": "event", "title": ev.get("event_name", id),
+                "subtitle": f"{ev.get('region','')} · 1-in-{ev.get('return_period','')} · net {_m(ev.get('net_loss_eur'))}",
+                "stages": stages, "agents": agents, "decision": None}
+    # submission lifecycle
+    sub = sql.query_one(f"""SELECT submission_public_id, cedant_name, broker, structure, zone_name, inbound_channel,
+        CAST(received_date AS STRING) received_date FROM {config.fqn('silver_submissions')} WHERE submission_public_id='{s}'""")
+    if not sub:
+        return {"found": False, "id": id}
+    ext = sql.query_one(f"""SELECT extraction_confidence, source_file FROM {config.fqn('landing_mrc_extractions')}
+        WHERE submission_public_id='{s}'""")
+    r = sql.query_many({
+        "tri": _struct_sql(f"{config.fqn('fn_triage_submission')}('{s}')"),
+        "pri": _struct_sql(f"{config.fqn('fn_price_submission')}('{s}')"),
+        "acc": _struct_sql(f"{config.fqn('fn_accumulation_impact')}('{s}')"),
+        "cap": _struct_sql(f"{config.fqn('fn_capital_impact')}('{s}')"),
+    })
+    tri, pri, acc, cap = (_parse_struct(r["tri"]), _parse_struct(r["pri"]), _parse_struct(r["acc"]), _parse_struct(r["cap"]))
+    dec = sql.query_one(f"""SELECT recommendation, decided_by, CAST(decision_ts AS STRING) decision_ts, bound
+        FROM {config.fqn('gov_decision_audit')} WHERE submission_public_id='{s}'""")
+    manual = (sub.get("inbound_channel") != "ADEPT_CDR")
+    breach = acc.get("breaches_appetite")
+    stages = [
+        {"stage": "Submission arrived", "status": "done", "source": "silver_submissions",
+         "detail": f"{sub.get('cedant_name')} via {sub.get('broker')} — {sub.get('structure')} in {sub.get('zone_name')}. Channel: {'manual slip' if manual else 'ADEPT/CDR clean feed'}, received {sub.get('received_date')}."},
+    ]
+    if ext:
+        conf = ext.get("extraction_confidence")
+        stages.append({"stage": "Document AI extraction", "status": ("done" if (conf and float(conf) >= 0.75) else "missing"),
+                       "source": "landing_mrc_extractions",
+                       "detail": f"Slip read by ai_query at confidence {conf} ({'passed the 0.75 gate' if (conf and float(conf) >= 0.75) else 'below gate → quarantined'})."})
+    stages += [
+        {"stage": "Triage", "status": "done", "source": "fn_triage_submission",
+         "detail": f"{(tri.get('decision') or '').replace('_',' ')}" + (f" · {tri.get('confidence')}% confidence" if tri.get('confidence') is not None else "")},
+        {"stage": "Price", "status": "done", "source": "fn_price_submission",
+         "detail": f"{pri.get('verdict','—')}" + (f" · combined { _pctf(pri.get('combined_ratio_pct')) }" if pri.get('combined_ratio_pct') is not None else "")},
+        {"stage": "Accumulation (the crux)", "status": ("missing" if breach else "done"), "source": "fn_accumulation_impact",
+         "detail": (f"BREACH — +{_m(acc.get('marginal_pml_1in200_eur'))} marginal PML pushes {acc.get('zone_name')} past appetite by {_m(acc.get('breach_amount_eur'))}." if breach
+                    else f"OK — marginal {_m(acc.get('marginal_pml_1in200_eur'))}, within appetite.")},
+        {"stage": "Capital (the crux)", "status": ("missing" if cap.get("capital_destructive") else "done"), "source": "fn_capital_impact",
+         "detail": (f"DESTRUCTIVE — RoRAC {_pctf(cap.get('rorac_pct'))} below the {_pctf(cap.get('hurdle_pct'))} hurdle." if cap.get("capital_destructive")
+                    else f"ACCRETIVE — RoRAC {_pctf(cap.get('rorac_pct'))} above the {_pctf(cap.get('hurdle_pct'))} hurdle.")},
+    ]
+    if dec:
+        stages.append({"stage": "Decision logged", "status": "done", "source": "gov_decision_audit",
+                       "detail": f"{(dec.get('recommendation') or '').upper()} by {dec.get('decided_by')} at {dec.get('decision_ts')}" + (" — BOUND" if dec.get('bound') in (True, 'true') else "")})
+    else:
+        stages.append({"stage": "Decision", "status": "awaited", "source": "gov_decision_audit",
+                       "detail": "No decision logged yet — log one on the Work-a-submission page."})
+    return {"found": True, "kind": "submission", "title": id,
+            "subtitle": f"{sub.get('cedant_name','')} · {sub.get('structure','')} · {sub.get('zone_name','')}",
+            "stages": stages, "agents": agents, "decision": dec}
+
+
+def _pctf(v):
+    try:
+        return format(round(float(v), 1), ",") + "%"
+    except Exception:
+        return "—"
+
+
 # ─────────────────────────── agents roster ───────────────────────────
 @app.get("/api/agents")
 def agent_roster():
