@@ -36,9 +36,10 @@ def api_config():
     if host and not host.startswith("http"):
         host = "https://" + host
     dash = f"{host}/dashboardsv3/{config.DASHBOARD_ID}/published" if (host and config.DASHBOARD_ID) else ""
+    dash_embed = f"{host}/embed/dashboardsv3/{config.DASHBOARD_ID}" if (host and config.DASHBOARD_ID) else ""
     return {"catalog": config.CATALOG, "schema": config.SCHEMA, "use_cache": config.USE_CACHE,
             "workspace_host": config.workspace_host(), "genie_space_id": config.GENIE_SPACE_ID,
-            "dashboard_url": dash, "entity": "Bricksurance Re"}
+            "dashboard_url": dash, "dashboard_embed_url": dash_embed, "entity": "Bricksurance Re"}
 
 
 # ─────────────────────────── CRO control tower ───────────────────────────

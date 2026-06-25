@@ -477,15 +477,15 @@ function ctDashboard(m){
     ${ctTabs()}
     <div id="ct-embed" style="margin-top:14px"></div>`;
   renderDashboardFrame();}
-function renderDashboardFrame(){const el=$("#ct-embed");if(!el)return;const u=CFG.dashboard_url;
-  if(!u){el.innerHTML='<div class="card"><span class="muted">Dashboard not configured (DASHBOARD_ID unset).</span></div>';return;}
+function renderDashboardFrame(){const el=$("#ct-embed");if(!el)return;const emb=CFG.dashboard_embed_url,u=CFG.dashboard_url;
+  if(!emb){el.innerHTML='<div class="card"><span class="muted">Dashboard not configured (DASHBOARD_ID unset).</span></div>';return;}
   el.innerHTML=`<div class="card" style="padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
         <div style="font-size:22px">📊</div>
         <div style="flex:1"><b>Bricksurance Re — Executive View</b><div class="muted" style="font-size:12px">Real Databricks AI/BI (Lakeview) dashboard · live over the gold marts</div></div>
         <a class="btn" style="text-decoration:none;white-space:nowrap" href="${u}" target="_blank" rel="noopener">Open in new tab ↗</a></div>
-      <iframe src="${u}" title="Bricksurance Re Executive Dashboard" style="width:100%;height:1500px;border:0;display:block;background:#fff" referrerpolicy="origin"></iframe></div>
-    <div class="muted" style="font-size:11.5px;margin-top:8px">If the panel above is blank, the workspace must approve this app's domain for AI/BI embedding (Settings ▸ Security ▸ <i>Approved domains for embedding AI/BI dashboards</i>). The dashboard always opens via the button above.</div>`;}
+      <iframe src="${emb}" title="Bricksurance Re Executive Dashboard" style="width:100%;height:1500px;border:0;display:block;background:#fff" loading="lazy"></iframe></div>
+    <div class="muted" style="font-size:11.5px;margin-top:8px">Embedded live via <code>/embed/dashboardsv3</code>. The dashboard also opens full-screen via the button above.</div>`;}
 
 // ─────────── Control-tower drill-downs — prove the tiles are computed, not hardcoded ───────────
 function openModal(html){let r=$("#modalRoot");if(!r){r=document.createElement("div");r.id="modalRoot";document.body.appendChild(r);}
