@@ -257,6 +257,10 @@
   .ystat .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#64748b;font-weight:700}
   .ystat .v{font-size:21px;font-weight:800;color:#0f172a;margin-top:2px}
   .yhd{font-weight:700;font-size:13px;margin-bottom:6px}
+  tr.trow{cursor:pointer}tr.trow:hover>td{background:#f1f5f9}
+  .lyrtop{display:flex;justify-content:space-between;font-size:11px;color:#64748b;font-weight:700;margin-bottom:4px}
+  .lyrbar{height:16px;border-radius:8px;background:#e2e8f0;overflow:hidden}
+  .lyrbar i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#dc2626)}
 </style>
 </head>
 <body>
@@ -750,18 +754,18 @@ async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loadin
   api("/event/"+encodeURIComponent(eid)+"/narrate").then(n=>{$("#ev-narr").innerHTML=`<span class="tag">Cat-Event agent · ${n.cache||''}</span>${n.text||''}`;}).catch(()=>{$("#ev-narr").innerHTML='<span class="tag">Cat-Event agent</span><span class="muted">unavailable</span>';});
   api("/event/"+encodeURIComponent(eid)+"/treaties").then(td=>{EV_TD=td.treaties||[];
     const tot=EV_TD.reduce((a,x)=>a+Number(x.ceded_loss_eur||0),0);
-    const rows=EV_TD.map(x=>`<tr>
+    const rows=EV_TD.map(x=>`<tr class="trow" onclick="treatyDrill('${x.treaty_id}')">
       <td><b>${x.treaty_id}</b>${isCorr(x.is_correlated_ref)?' <span class="pill red">correlated</span>':''}</td>
       <td>${x.cedant}</td><td>${x.structure}</td><td style="text-align:right">${eurm(x.ceded_loss_eur)}</td>
       <td>${isCorr(x.reinstatement)?'<span class="pill amber">reinstated</span>':'—'}</td></tr>`).join("");
     $("#ev-treaties").innerHTML=`<table><thead><tr><th>Treaty</th><th>Cedant</th><th>Structure</th><th style="text-align:right">Ceded loss</th><th>Reinstatement</th></tr></thead>
       <tbody>${rows}<tr class="totrow"><td colspan="3">TOTAL — ${EV_TD.length} treaties = gross loss</td><td style="text-align:right">${eurm(tot)}</td><td></td></tr></tbody></table>
-      <div class="muted" style="font-size:11px;margin-top:6px">The ${EV_TD.length} ceded losses sum to the gross loss above — computed by <code>fn_event_treaty_detail</code> across the live book.</div>`;}).catch(()=>{});}
+      <div class="muted" style="font-size:11px;margin-top:6px">The ${EV_TD.length} ceded losses sum to the gross loss above — computed by <code>fn_event_treaty_detail</code> across the live book. <b>Click any treaty to see why it paid — its layer, how far the event reached, and any reinstatement.</b></div>`;}).catch(()=>{});}
 
 function eventLossDrill(){const r=EV_R||{};const td=EV_TD||[];
   if(!td.length){openModal('<div class="loading">Loading the responding treaties…</div>');api("/event/"+encodeURIComponent(EV_EID)+"/treaties").then(d=>{EV_TD=d.treaties||[];eventLossDrill();});return;}
   const tot=td.reduce((a,x)=>a+Number(x.ceded_loss_eur||0),0);
-  const rows=td.map(x=>`<tr${isCorr(x.is_correlated_ref)?' style="background:#fef2f2"':''}>
+  const rows=td.map(x=>`<tr class="trow" onclick="treatyDrill('${x.treaty_id}')"${isCorr(x.is_correlated_ref)?' style="background:#fef2f2"':''}>
     <td><b>${x.treaty_id}</b>${isCorr(x.is_correlated_ref)?' <span class="pill red" style="font-size:9px">correlated</span>':''}</td>
     <td>${x.cedant}</td><td>${x.structure}</td><td>${isCorr(x.reinstatement)?'<span class="pill amber">yes</span>':'—'}</td>
     <td style="text-align:right">${eurm(x.ceded_loss_eur)}</td></tr>`).join("");
@@ -783,6 +787,33 @@ SELECT treaty_id, cedant, ceded_loss_eur, reinstatement
 FROM   fn_event_treaty_detail('${EV_EID}')
 ORDER  BY ceded_loss_eur DESC;
 -- gross = SUM(ceded_loss_eur); net = gross − reinstatement_premium_eur (fn_event_response)</div></div>`);}
+
+// Per-treaty drill — why this one treaty paid: its layer, how far the event reached, the reinstatement.
+function treatyDrill(tid){const r=EV_R||{};
+  if(!EV_TD||!EV_TD.length){api("/event/"+encodeURIComponent(EV_EID)+"/treaties").then(d=>{EV_TD=d.treaties||[];treatyDrill(tid);});return;}
+  const t=EV_TD.find(x=>x.treaty_id===tid);if(!t){return;}
+  const lim=Number(t.limit_eur||0),att=Number(t.attachment_eur||0),ced=Number(t.ceded_loss_eur||0),rp=Number(t.reinstatement_premium_eur||0);
+  const xol=/XoL/i.test(t.structure||""),reins=isCorr(t.reinstatement),used=lim>0?Math.min(100,ced/lim*100):0;
+  const m=v=>(v/1e6).toLocaleString("en-GB",{maximumFractionDigits:0});
+  const layer=xol?`<div style="margin-top:4px">
+      <div class="lyrtop"><span>attaches €${m(att)}m</span><span>limit €${m(lim)}m</span></div>
+      <div class="lyrbar"><i style="width:${used}%"></i></div>
+      <div class="muted" style="font-size:11px;margin-top:4px">${used.toFixed(0)}% of the layer consumed by this event${reins?' — exhausted':''}</div></div>`
+    :`<div class="muted" style="font-size:12px">Proportional treaty (${t.structure}) — pays a share of the cedant's event loss rather than a fixed excess layer.</div>`;
+  const eq=xol?`ceded loss = <b>min(limit, max(0, event loss to ${t.cedant} − attachment))</b>. The modelled loss pierced the €${m(att)}m attachment; <b>${eurm(ced)}</b> fell into this €${m(lim)}m layer${reins?' and exhausted it':''}.`
+    :`ceded loss = <b>our share of ${t.cedant}'s event loss</b> = <b>${eurm(ced)}</b>.`;
+  openModal(`<div class="eyebrow">Cat event · ${r.event_name||''} · why this treaty paid</div>
+    <h1 style="font-size:21px;margin:2px 0 6px">${t.treaty_id} — ceded ${eurm(ced)}${reins?' <span class="pill amber" style="font-size:11px">reinstated</span>':''}${isCorr(t.is_correlated_ref)?' <span class="pill red" style="font-size:11px">correlated</span>':''}</h1>
+    <p class="muted" style="margin:0 0 12px">${t.cedant} · ${t.structure}</p>
+    ${layer}
+    <div class="recon" style="margin-top:14px"><div class="rb">${eurm(ced)}</div><div class="eq">${eq}</div></div>
+    ${reins?`<div class="note" style="margin-top:12px">🔁 The layer is ${used.toFixed(0)}% consumed → a <b>reinstatement</b> is triggered: cover is restored for the remainder of the season and Bricksurance Re earns <b>${eurm(rp)}</b> of reinstatement premium income (it nets against the loss in the book-wide total).</div>`:`<div class="muted" style="margin-top:12px;font-size:12px">Layer not exhausted — no reinstatement triggered.</div>`}
+    <div class="srcbar" style="margin-top:12px"><b>Source · live from Unity Catalog.</b> ceded loss, limit and the reinstatement flag from <code>event_treaty_losses</code>; the attachment from <code>inforce_treaties</code>. One of the <b>${r.n_treaties_responding}</b> responding treaties whose ceded losses sum to the ${eurm(r.gross_loss_eur)} gross loss. <span class="sqltog" onclick="toggleSql('sql-td')">▸ show the SQL</span>
+      <div class="sqlbox" id="sql-td">SELECT l.treaty_id, l.ceded_loss_eur, l.limit_eur, t.attachment_eur,
+       l.reinstatement_flag, l.reinstatement_premium_eur
+FROM   event_treaty_losses l
+JOIN   inforce_treaties t USING (treaty_id)
+WHERE  l.event_public_id = '${EV_EID}' AND l.treaty_id = '${tid}';</div></div>`);}
 
 function eventSolvencyDrill(){const r=EV_R||{};
   const ofb=Number(r.eligible_own_funds_eur),ofa=Number(r.own_funds_after_eur),net=Number(r.net_loss_eur);

@@ -249,7 +249,21 @@ def event_response(eid: str):
 
 @app.get("/api/event/{eid}/treaties")
 def event_treaties(eid: str):
-    return {"treaties": sql.query(f"SELECT * FROM {config.fqn('fn_event_treaty_detail')}('{sql.esc(eid)}')")}
+    e = sql.esc(eid)
+    # fn_event_treaty_detail gives ceded/limit/reinstatement/cedant; join the in-force record for the
+    # attachment and the reinstatement premium so each row can drill into its own layer waterfall.
+    return {"treaties": sql.query(f"""
+        SELECT d.treaty_id, d.cedant, d.structure,
+               CAST(d.ceded_loss_eur AS double) ceded_loss_eur, CAST(d.limit_eur AS double) limit_eur,
+               CAST(t.attachment_eur AS double) attachment_eur,
+               CAST(t.ceded_premium_eur AS double) ceded_premium_eur,
+               CAST(l.reinstatement_premium_eur AS double) reinstatement_premium_eur,
+               d.reinstatement, d.is_correlated_ref
+        FROM {config.fqn('fn_event_treaty_detail')}('{e}') d
+        LEFT JOIN {config.fqn('inforce_treaties')} t ON t.treaty_id = d.treaty_id
+        LEFT JOIN {config.fqn('event_treaty_losses')} l
+               ON l.treaty_id = d.treaty_id AND l.event_public_id = '{e}'
+        ORDER BY d.ceded_loss_eur DESC""")}
 
 
 @app.get("/api/event/{eid}/narrate")
