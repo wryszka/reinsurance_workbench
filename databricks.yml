@@ -46,6 +46,32 @@ targets:
       app_service_principal_id: "95b10ab0-a098-445f-8af2-a9d0025df59b"
       genie_space_id: "01f168f7b5f91bcb836e7769db6c7586"
 
+  # CENTRAL / SHAREABLE deployment — assets live in /Workspace/Shared, NOT a personal home dir, so ANY SA can
+  # demo and redeploy. production mode → no dev_<user>_ prefix, clean resource names, Shared root_path.
+  # ONE-TIME MIGRATION off the home (dev) deployment — run deliberately when it suits:
+  #   1) databricks bundle destroy -t dev -p DEV          # removes home jobs/pipeline/app + files; UC tables/data SURVIVE
+  #   2) databricks bundle deploy  -t shared -p DEV        # deploys notebooks + app to /Workspace/Shared (2-pass if needed)
+  #   3) databricks apps deploy reinsurance-workbench -t shared -p DEV
+  #   4) capture the NEW app service principal → set app_service_principal_id below → re-grant:
+  #        schema USE/SELECT/EXECUTE/MODIFY/CREATE TABLE · warehouse CAN_USE · CAN_QUERY on the 2 model + 9 agent
+  #        endpoints · CAN_MANAGE_RUN on the reset job   (exact list in docs/REINSURANCE_FORUM_DEMO_RUNBOOK.md §5)
+  #   5) run setup → medallion pipeline → ml → ai → 06b agent → reset; verify smoke 11/11 + app RUNNING.
+  # App name + workspace are unchanged → SAME app URL. For sharing that outlives any one person, set run_as to a
+  # service principal instead of a user.
+  shared:
+    mode: production
+    workspace:
+      host: https://fevm-lr-dev-aws-us.cloud.databricks.com
+      profile: DEV
+      root_path: /Workspace/Shared/reinsurance_workbench
+    run_as:
+      user_name: laurence.ryszka@databricks.com
+    variables:
+      catalog: lr_dev_aws_us_catalog
+      warehouse_id: "a3b61648ea4809e3"
+      app_service_principal_id: ""   # captured after the first `-t shared` app create, then grants re-applied
+      genie_space_id: "01f168f7b5f91bcb836e7769db6c7586"
+
 sync:
   exclude:
     - app/.venv/

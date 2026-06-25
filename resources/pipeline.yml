@@ -6,7 +6,7 @@ resources:
       photon: true
       catalog: ${var.catalog}
       schema: ${var.schema}
-      development: true
+      # development flag is set by the target mode: dev (mode:development) → true; shared (mode:production) → false.
       event_log:
         catalog: ${var.catalog}
         schema: ${var.schema}
