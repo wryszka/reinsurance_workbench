@@ -395,9 +395,10 @@ function landing(){const m=$("#main");
 // ─────────── Control Tower (CRO — the bookend) ───────────
 let CT_TAB='capacity';
 function setCtTab(t){CT_TAB=t;portfolio();}
-const ctTabs=()=>`<div class="tabs"><div class="tab ${CT_TAB==='capacity'?'on':''}" onclick="setCtTab('capacity')">📊 Capacity & capital</div><div class="tab ${CT_TAB==='business'?'on':''}" onclick="setCtTab('business')">🔭 Business view</div><div class="tab ${CT_TAB==='dashboard'?'on':''}" onclick="setCtTab('dashboard')">📈 Executive dashboard</div></div>`;
+const ctTabs=()=>`<div class="tabs"><div class="tab ${CT_TAB==='capacity'?'on':''}" onclick="setCtTab('capacity')">📊 Capacity & capital</div><div class="tab ${CT_TAB==='business'?'on':''}" onclick="setCtTab('business')">🔭 Business view</div><div class="tab ${CT_TAB==='catanalytics'?'on':''}" onclick="setCtTab('catanalytics')">🌪 Cat analytics</div><div class="tab ${CT_TAB==='dashboard'?'on':''}" onclick="setCtTab('dashboard')">📈 Executive dashboard</div></div>`;
 async function portfolio(){const m=$("#main");
   if(CT_TAB==='business')return ctBusiness(m);
+  if(CT_TAB==='catanalytics')return ctCatAnalytics(m);
   if(CT_TAB==='dashboard')return ctDashboard(m);
   m.innerHTML='<div class="loading">Loading control tower…</div>';
   const d=await api("/control-tower");
@@ -472,6 +473,15 @@ function renderDashboardEmbed(){const el=$("#ct-dashboard");if(!el)return;const 
        <div style="font-size:16px;font-weight:700">Bricksurance Re — Executive View</div>
        <div class="muted" style="color:#cbd5e1;font-size:12.5px">A real Databricks AI/BI (Lakeview) dashboard over the gold marts — peak-zone PML vs appetite, capital, cat-vendor divergence and the renewal pipeline.</div></div>
      <a class="btn" style="text-decoration:none;white-space:nowrap" href="${u}" target="_blank" rel="noopener">Open the dashboard ↗</a></div>`;}
+
+// ─────────── Control Tower · Cat analytics tab — the YELT in Delta, queried against the book ───────────
+function ctCatAnalytics(m){
+  m.innerHTML=`<div class="eyebrow">CRO Control Tower</div><h1>The book at a glance</h1>
+    <p class="sub">Cat-model output at scale — the simulated loss table (YELT) landed in Delta, queried live against the in-force book to derive the loss distribution and the 1-in-200 PML.</p>
+    ${present('Cat-model output at scale — a real YELT in Delta queried against the live book. The EP curve, the 1-in-200 PML and the per-zone OEP, computed live in seconds. The marginal version of this is the crux.')}
+    ${ctTabs()}
+    <div id="ct-yelt" style="margin-top:14px"></div>`;
+  loadYelt('ct-yelt');}
 
 // ─────────── Control Tower · Executive dashboard tab — the AI/BI dashboard embedded in-app ───────────
 function ctDashboard(m){
@@ -868,7 +878,11 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
       <div class="mnw"><b>Minutes, not weeks.</b><span>The slip-to-capital-verdict round trip — today a multi-team, multi-day relay across systems — runs end-to-end while the underwriter waits.</span></div>
       <div class="muted" style="font-size:11.5px;margin-top:10px">This kills the three things that make the existing stack slow: <b>data prep</b> (conform once, not per tool), <b>orchestration</b> (Workflows replace the manual hand-carry between systems), and <b>governance</b> — every hop above is captured as real Unity Catalog <b>lineage</b> and audited out of the box (<a href="#governance" style="color:#2563eb">see Governance ▸ lineage &amp; deal track</a>).</div>
       <div class="muted" style="font-size:11px;margin-top:7px">External engines are <b>mocked</b> here; the pattern (Workflows + Auto Loader + UC functions wrapping the API calls) is the production design. Moving these engines <i>onto</i> Databricks can happen organically over time — it is not a precondition. Today we make your existing stack fast.</div></div>
-    <div id="ing-yelt"></div>
+    <div class="card" style="margin-top:18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:26px">🌪</div>
+      <div style="flex:1;min-width:260px"><b>Cat-model output at scale — the YELT, landed in Delta</b>
+        <div class="muted" style="font-size:12.5px">Vendor cat models emit huge simulated loss tables (YELTs / PLTs). We ingest them into Delta and query them against the live book to derive the EP curve — surfaced as a CRO view in the Control Tower.</div></div>
+      <a class="btn" style="text-decoration:none;white-space:nowrap;cursor:pointer" onclick="CT_TAB='catanalytics';location.hash='#portfolio'">Open Cat analytics →</a></div>
     <h2 style="font-size:16px;margin:28px 0 2px">The live pipeline today</h2>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">What's actually running in this demo — quality-gated, with Document AI and geospatial accumulation. Every source above shares this exact pattern (Auto Loader · Structured Streaming · read_files · ai_query · Volumes).</p>
     <div id="ing-kpi" class="grid g4"></div>
@@ -895,7 +909,6 @@ ORDER  BY layer, table_name;</div></div></div>
       (d.rules||[]).map(r=>`<tr><td><span class="pill ${r.layer==='bronze'?'amber':r.layer==='silver'?'':'green'}">${r.layer}</span></td><td>${r.table_name}</td><td><b>${r.expectation}</b></td><td class="muted" style="font-size:11px">${r.predicate}</td><td>${r.passing_records}</td><td style="${Number(r.failing_records)>0?'color:#dc2626;font-weight:700':''}">${r.failing_records}</td><td>${pct(r.pass_rate_pct)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">scorecard building…</td></tr>'}</tbody></table>`;
   }).catch(()=>{$("#ing-rules").innerHTML='<span class="muted">scorecard unavailable</span>';});
   loadStorm();
-  loadYelt();
   api("/ingestion/sources").then(renderSources).catch(()=>{$("#ing-sources").innerHTML='<span class="muted">source catalogue unavailable</span>';});
   api("/ingestion/document").then(d=>{const ex=d.extractions||[];const top=ex[0],low=ex[ex.length-1];
     const card=(e,tag)=>e?`<div class="card" style="background:#faf5ff"><div class="eyebrow">${tag} · confidence ${e.extraction_confidence}</div>
@@ -964,7 +977,7 @@ SELECT percentile(oep,0.995) AS oep_1in200,   -- the Solvency II 1-in-200
        percentile(aep,0.995) AS aep_1in200,
        avg(aep)              AS aal
 FROM   by_year RIGHT JOIN (SELECT explode(sequence(1,100000)) trial_id) USING (trial_id);`;
-async function loadYelt(){const el=$("#ing-yelt");if(!el)return;
+async function loadYelt(elId){const el=$("#"+(elId||"ing-yelt"));if(!el)return;
   try{const [s,e]=await Promise.all([api("/yelt/summary"),api("/yelt/ep")]);
     const st=s.stat||{},sz=s.size||{},ep=e.ep||{};
     const num=v=>v==null?'—':Number(v).toLocaleString('en-GB');
