@@ -11,25 +11,27 @@ App: **https://reinsurance-workbench-7474656169654171.aws.databricksapps.com**
 treaty reinsurer's two hardest questions at the moment they matter: *"should we write this submission, given the
 whole book?"* and *"a catastrophe just hit — what's our loss and our capital position, now?"*
 
-**The problem it solves.** At renewal, submissions flood the desk and brokers move in hours. To decide well an
-underwriter must stitch together the cat models, the in-force book, the exposure data and the capital model —
-which today live in five different tools. So they either quote **slow** (and lose the deal) or quote **blind**
-(and write the deal that quietly breaks the book). And when a storm actually lands, getting a book-wide loss and
-solvency number takes **days**.
+**The problem it solves.** As the 1-Jan renewal nears, submissions flood the desk and the turnaround window
+shrinks from weeks to days — sometimes hours. To decide well an underwriter must stitch together the cat models,
+the in-force book, the exposure data and the capital model — which today live in five different tools. So they
+either quote **slow** (and lose the deal) or quote **blind** (and write the deal that quietly breaks the book).
+And when a storm actually lands, even a **day-one modelled** loss and solvency number takes **days** to assemble.
 
 **What we show — the flow, in a few steps:**
-1. **A submission arrives** — even as an unstructured broker slip; AI reads it into structured data.
+1. **A submission arrives** — even as a horrendously-formatted MRC slip (often scanned, with handwritten notes);
+   Document AI reads the legible ones into structured data and **auto-quarantines the garbled ones for human review**.
 2. **Triage & price** — is it in appetite, and is the rate adequate (rate-on-line, burning cost)?
 3. **The crux — accumulation & capital** — what does binding *this* deal do to peak-zone PML vs appetite, and
    does it earn its capital (RoRAC vs hurdle)? This is where a good-looking deal is exposed as toxic in aggregate.
 4. **Decide** — the AI advises and challenges; a human binds; the decision is logged to an audit trail.
-5. **When the storm hits** — one click gives the book-wide loss, reinstatements, and the hit to the solvency ratio.
+5. **When the storm hits** — one click gives the **day-one modelled** loss (event footprint × in-force limits),
+   reinstatements, and the hit to the solvency ratio.
 6. **The CRO control tower** frames it all: capacity vs appetite by peak zone, and capital.
 
 **Why it matters (the value):**
 - **Win more renewals** — quote in seconds, not days, without losing control of the book.
 - **Avoid the toxic deals** — see the marginal accumulation and capital cost *before* you bind.
-- **Respond to events in seconds, not days** — book-wide loss and solvency impact on demand.
+- **Respond to events in seconds, not days** — a **day-one modelled** book-wide loss and solvency impact on demand.
 - **Prove every number** — every headline tile drills to the rows it is computed from, the source UC table/function,
   and the SQL. Nothing is a hardcoded mockup.
 - **Govern the whole thing** — one governed copy of the data surfaced many ways by role; real lineage, masking,
@@ -54,6 +56,15 @@ scale-to-zero warehouse cold-start; the reset/warm step covers it.
 
 **The shape:** Overview → Control Tower (prove it) → Renewal Desk → work the two deals → the storm → Governance → close.
 
+> **Credibility watch-outs — say these, an actuary or cat modeller is listening:**
+> 1. The cat-event figure is a **day-one *modelled* loss** (the overnight event footprint run against our in-force
+>    limits) — *not* actual cedant-reported losses, which aren't known for weeks. Say "modelled."
+> 2. The clean motor deal isn't "zero accumulation" — motor carries its own hail / convective-storm accumulation.
+>    It's **clear of our peak *windstorm* zone**. Frame it as "doesn't clash with peak windstorm," not "no accumulation."
+> 3. **Reinstatements apply to the cat XoL (`sub:900002`), not the motor quota share (`sub:900001`)** — don't conflate them.
+> 4. MRC slips really are formatted horrendously (scanned, handwritten) — lean into **auto-quarantine for human review**;
+>    the friction is what makes the extraction believable.
+
 ### 0 · Open — the Overview landing  *(frame the whole thing)*
 The app opens on the **Overview**: the underwriting cycle end to end as seven clickable stages
 (Ingestion → Triage → Price → Accumulation → Capital → Decide → Cat event), the "About this demo" honesty box,
@@ -71,13 +82,15 @@ it is computed from — live."* → **Open the renewal desk**.
 
 ### 2 · Renewal Desk  *(the underwriter's daily flood)*
 Submissions landing for 1-Jan — some via the clean **ADEPT/CDR** feed, some the messy manual path. The "X
-quarantined" count clicks through to the rows DLT held back (nothing silently lost). The pain line: *"brokers move
-in hours — each one, priced right* and *book-aware?"* Two heroes are pinned at the top.
+quarantined" count clicks through to the rows DLT held back (nothing silently lost). The pain line: *"as 1-Jan
+nears the window shrinks from weeks to days — sometimes hours — and each one has to be priced right* and
+*book-aware."* Two heroes are pinned at the top.
 
 ### 3a · The clean one — `sub:900001`
 European **motor quota share**, Bricksurance SE, clean. **Triage: fast-track. Price: adequate** (94% combined).
-Accumulation ~zero (motor is away from peak cat), capital **accretive** (RoRAC ~23%). Banner: **RECOMMEND-TO-BIND.**
-*"Quote it and move on — speed wins renewals."*
+Accumulation **clear** — it doesn't clash with our peak European-windstorm exposure (motor carries its own hail /
+convective-storm accumulation, but not in *this* peak zone); capital **accretive** (RoRAC ~23%). Banner:
+**RECOMMEND-TO-BIND.** *"Quote it and move on — speed wins renewals."*
 
 ### 3b · The bomb — `sub:900002`  *(the centrepiece)*
 European **windstorm cat XoL, €30m xs €20m**, reputable cedant (Helvetia, AA-). *Standalone it looks great* —
@@ -94,8 +107,9 @@ European **windstorm cat XoL, €30m xs €20m**, reputable cedant (Helvetia, AA
   aggregate. Click **Refer** to log the decision (it MERGEs into the governance audit trail).
 
 ### 4 · The wow — Cat Event
-*"Overnight, Windstorm Eckhart made landfall in NW Europe."* Open **Cat Event**. In seconds, the book-wide
-response: **Solvency II 181% → 141%**, **22 treaties respond**, **gross €150m / net €133m**, reinstatement income,
+*"Overnight, Windstorm Eckhart made landfall in NW Europe — here's the **day-one modelled** response, the event
+footprint run against our in-force limits."* Open **Cat Event**. In seconds, the book-wide modelled response:
+**Solvency II 181% → 141%**, **22 treaties respond**, **gross €150m / net €133m**, reinstatement income,
 most-exposed cedant **Helvetia (€50m)**. *Then prove it:* click the **net-loss** tile → the 22 responding treaties
 whose ceded losses **sum to the €150m gross**, minus reinstatement = net €133m; click the **solvency gauge** →
 own funds €600m − €133m ÷ SCR €331m = 141.2%. *"Days of manual exposure work — here it's one click, and you can
@@ -150,10 +164,12 @@ source tables, the build time, and the SQL.
 > **Wow:** *every headline number drills to the live rows it is computed from — no spreadsheet, no black box.*
 
 ### Story 3 — "The 6 a.m. storm" *(CRO / Cat manager)*
-*As a CRO the morning after a windstorm, I need the book-wide loss and solvency hit now, not in three days.*
-Open **Cat Event**: in seconds — **22 treaties respond, gross €150m, net €133m, Solvency II 181% → 141%**, most
-exposed Helvetia €50m. Click the net-loss tile → the 22 treaties that sum to it.
-> **Wow:** *days of manual exposure work collapsed to one click — with the working shown.*
+*As a CRO the morning after a windstorm, I need a first read on the book-wide loss and solvency hit now, not in three days.*
+Open **Cat Event**: the overnight event footprint is run against our in-force limits → a **day-one modelled** read,
+in seconds — **22 treaties respond, gross €150m, net €133m, Solvency II 181% → 141%**, most exposed Helvetia €50m.
+Click the net-loss tile → the 22 treaties that sum to it. *(Actual cedant-reported losses firm up over weeks; this
+is the day-one modelled view that lets you act.)*
+> **Wow:** *days of manual exposure modelling collapsed to one click — with the working shown.*
 
 ### Story 4 — "Explain the AI to the regulator" *(Compliance / Chief Risk)*
 *As compliance, I have to show exactly how an AI-assisted decision was reached, and prove the data is governed.*
@@ -175,6 +191,68 @@ link to where it sits in the workbench; "Ask the Portfolio" opens an AI/BI Genie
 same submission is a raw slip for the underwriter, structured data for pricing, a peak-zone PML for the CRO,
 features for the models, a tool for the agents, and natural language via Genie — each role sees only what it needs.
 > **Wow:** *one source of truth, surfaced seven ways by role — governed, masked, and lineage-tracked.*
+
+---
+
+# Part 4 — Jargon definitions (for the presenter)
+
+Reinsurance has its own vocabulary. These are the terms that come up in the run — defined in plain English for a
+Databricks SA, not an actuary. (Databricks terms — Genie, Document AI, Unity Catalog, MLflow — are assumed known.)
+
+### The business
+
+| Term | What it means (plain English) |
+|------|-------------------------------|
+| **Cedant** | The insurer that *buys* reinsurance — it "cedes" (passes on) part of its risk. In this demo, **Bricksurance SE** is a cedant of **Bricksurance Re**. |
+| **Reinsurer** | The company that *insures the insurers*. Bricksurance Re. Takes on (assumes) risk in exchange for premium. |
+| **Treaty** | A reinsurance contract covering a *whole defined book* of the cedant's policies, agreed up front (vs. one-off "facultative" deals). The unit of business here. |
+| **Ceded / assumed** | Two sides of the same coin: the cedant *cedes* risk; the reinsurer *assumes* it. |
+| **Submission** | A treaty the cedant's broker shopfronts to reinsurers asking for a quote — the thing landing on the Renewal Desk. |
+| **Renewal (1-Jan)** | Most treaties renew annually; 1 January is the big renewal date for European property/cat — hence the "renewal flood." |
+| **Broker / MRC slip** | The broker intermediates the placement. The **MRC slip** (Market Reform Contract) is the standard contract document — often a semi-structured PDF, which is why Document AI reads it. |
+| **Bordereaux** | Periodic spreadsheets a cedant sends listing premiums or losses policy-by-policy (premium bordereaux / loss bordereaux). A classic messy-data feed. |
+| **ADEPT / CDR** | Market data-exchange standards for clean, structured submission/bordereaux feeds (contrast with the messy manual path). |
+
+### How a deal is priced
+
+| Term | What it means |
+|------|----------------|
+| **Quota share (proportional)** | The reinsurer takes a fixed % of every premium and every loss (e.g. 30%). `sub:900001` is a motor quota share. |
+| **Excess of loss (XoL)** | Non-proportional: the reinsurer pays only the part of a loss *above* an attachment, up to a limit. |
+| **Layer · "€30m xs €20m"** | An XoL layer: pays losses **in excess of €20m** (the **attachment**), up to **€30m** more (the **limit**). So it covers €20m–€50m. |
+| **Cat XoL** | Excess-of-loss covering *catastrophe* events (windstorm, flood, quake). `sub:900002` is an EU windstorm cat XoL. |
+| **Rate-on-line (RoL)** | Premium ÷ limit — the headline price of an XoL layer. A €3m premium on a €30m limit = 10% RoL. |
+| **Burning cost** | Pricing from history: average past losses to the layer ÷ premium base. The "experience" half of pricing. |
+| **Loss ratio** | Losses ÷ premium. Below 100% = underwriting profit on losses alone. |
+| **Combined ratio** | Loss ratio + expense ratio. **Below 100% = profitable; above = losing money.** `sub:900002` at 56% looks great in isolation. |
+| **Reinstatement** | After an XoL layer pays out, the cedant pays a **reinstatement premium** to restore the cover for the rest of the year — extra income to the reinsurer, which is why net loss < gross loss. |
+
+### Catastrophe & accumulation (the crux)
+
+| Term | What it means |
+|------|----------------|
+| **Peril** | The cause of loss — windstorm, flood, hurricane, earthquake. |
+| **Peak zone** | A geography × peril where exposure concentrates (e.g. *European windstorm*). The reinsurer sets a capacity limit per peak zone. |
+| **Accumulation** | The total exposure that piles up in one peak zone across *all* treaties — the thing a single deal can quietly blow up. The demo's central idea. |
+| **PML (Probable Maximum Loss)** | The modelled loss at a chosen severity. Here, the loss the book would take from a 1-in-200-year event in a zone. |
+| **1-in-200 / return period** | A 1-in-200-year event = the **99.5th percentile** annual loss. It's the Solvency II calibration point. "1-in-100/200/250" are different severities. |
+| **EP curve (AEP / OEP)** | Exceedance-Probability curve from a cat model: loss vs. annual probability. **AEP** = aggregate (all events in a year); **OEP** = occurrence (the single biggest event). We *ingest and blend* these from vendors — we don't run the cat model. |
+| **Cat vendor** | Third parties (e.g. Verisk/AIR, RMS/Moody's) who run the physical cat models and sell the EP curves. We blend three that disagree. |
+| **Appetite / capacity / headroom** | **Appetite** = the max PML the reinsurer is willing to hold in a zone; **capacity/headroom** = how much room is left before it's breached. |
+| **CRESTA** | Standardised geographic accumulation zones (postcode-ish grids) the industry uses to aggregate exposure. |
+| **TIV (Total Insured Value)** | The total value insured at a location/zone — the exposure base for accumulation. |
+
+### Capital & solvency
+
+| Term | What it means |
+|------|----------------|
+| **Solvency II** | The EU regulatory capital regime for (re)insurers. Drives the headline solvency ratio. |
+| **SCR (Solvency Capital Requirement)** | The capital a (re)insurer must hold to survive a 1-in-200-year year. |
+| **BSCR / diversification benefit** | **Basic SCR** = the SCR aggregated across risks; because peak zones aren't perfectly correlated, the total is *less* than the sum of standalone SCRs — that reduction is the **diversification benefit**. |
+| **Own funds** | The capital actually available to absorb losses (≈ tier-1 capital). |
+| **Solvency II ratio** | **Own funds ÷ SCR.** Above 100% = solvent; regulators watch the buffer. 181% in the demo; a storm drops it to 141%. |
+| **RoRAC** | **Return on Risk-Adjusted Capital** — the deal's expected return ÷ the marginal capital it consumes. Compared against a **hurdle** (15% here). Below the hurdle = capital-destructive even if the price looks fine. |
+| **IFRS 17** | The accounting standard for insurance contracts (a *reporting* concern). Deliberately **out of scope** here — it lives in the Solvency II demo; we bridge only via the 1-in-200 SCR. |
 
 ---
 
