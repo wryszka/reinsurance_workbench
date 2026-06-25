@@ -246,6 +246,13 @@
   .dag .hub{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:0;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35}
   .dag .eng{border-color:#fde68a;background:#fffbeb}
   .dag .arrow{align-self:center;color:#94a3b8;font-size:20px;font-weight:700}
+  .dagcap{display:flex;gap:10px;margin:14px 0 2px;flex-wrap:wrap}
+  .dagcap .step{flex:1;min-width:150px;border-radius:9px;padding:8px 11px;background:#f8fafc;border:1px solid var(--line)}
+  .dagcap .step .k{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#64748b;font-weight:700}
+  .dagcap .step b{font-size:12.5px}.dagcap .step .d{font-size:10.5px;color:var(--mut);margin-top:1px}
+  .dagcap .step.s1{background:#eff6ff;border-color:#bfdbfe}.dagcap .step.s2{background:#eef2ff;border-color:#c7d2fe}.dagcap .step.s3{background:#ecfdf5;border-color:#a7f3d0}
+  .mnw{display:flex;align-items:center;gap:10px;margin-top:12px;padding:9px 13px;border-radius:9px;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff}
+  .mnw b{font-size:14px}.mnw span{font-size:11.5px;color:#cbd5e1}
 </style>
 </head>
 <body>
@@ -306,7 +313,7 @@ function runHandshake(m,sid){let i=0;const steps=Math.max(HS_CAT.length,HS_CAP.l
   const render=()=>{m.innerHTML=`<div class="eyebrow">Underwriter · work a submission</div><h1>${sid}</h1>
     <p class="sub">Orchestrating your engines — Databricks packages the structured slip and calls your cat &amp; capital models, then brings the numbers back to the desk.</p>
     <div class="grid g2">${col('🌀 Catastrophe model · Verisk Touchstone',HS_CAT)}${col('🏛️ Capital model · WTW Igloo',HS_CAP)}</div>
-    <div class="note" style="margin-top:14px">Databricks is the <b>orchestration layer</b> — it doesn't replace your cat or capital engines, it connects them at the speed of the desk. <i>(the calls are mocked in this demo; the platform pattern is real)</i></div>`;};
+    <div class="note" style="margin-top:14px">Databricks is the <b>orchestration layer</b> — it prepped the slip, called your cat &amp; capital engines and is marshalling the answers back to the desk. This round trip is a multi-day, multi-team relay today; here it runs in <b>minutes, not weeks</b>. <i>(the engine calls are mocked in this demo; the platform pattern is real)</i></div>`;};
   render();clearInterval(HS_T);HS_T=setInterval(()=>{i++;if(i>steps){clearInterval(HS_T);return;}render();},460);}
 
 function renderNav(){let route=(location.hash||"#home").slice(1).split("/")[0];
@@ -786,7 +793,11 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
     <div class="card storm" id="stormCard"><span class="muted" style="color:#94a3b8">loading live event radar…</span></div>
     <div id="ing-sources"><span class="muted">loading source catalogue…</span></div>
     <div class="card" style="margin-top:18px"><h3>🔗 Orchestration architecture — Databricks as the chassis between your systems</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:10px">We don't replace your policy, cat or capital systems — we <b>orchestrate</b> them. The slip and exposure go out to your cat &amp; capital engines; the modelled numbers come straight back to the underwriter's desk.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:4px">We don't replace your policy, cat or capital systems — we <b>orchestrate</b> them. <b style="color:#1e293b">Prep the data, orchestrate your engines, consume the outputs</b> — and make sense of them at the speed of the desk.</div>
+      <div class="dagcap">
+        <div class="step s1"><div class="k">1 · Prep</div><b>Get the data engine-ready</b><div class="d">Slips, bordereaux &amp; exposure landed and conformed once — no re-keying, no spreadsheet handoffs.</div></div>
+        <div class="step s2"><div class="k">2 · Orchestrate</div><b>Call your engines, marshal the answers</b><div class="d">Workflows fan the structured slip out to your cat &amp; capital models and bring the numbers back.</div></div>
+        <div class="step s3"><div class="k">3 · Consume</div><b>Make sense of it on the desk</b><div class="d">Modelled PML, marginal SCR and RoRAC land back next to the deal — read, not chased.</div></div></div>
       <div class="dag">
         <div class="band">
           <div class="node"><b>Sapiens / SAP</b><div class="sub">policy &amp; in-force</div></div>
@@ -800,7 +811,9 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
           <div class="node eng"><b>WTW Igloo / Tyche</b><div class="sub">→ marginal SCR</div></div></div>
         <div class="arrow">→</div>
         <div class="band"><div class="node"><b>Delta gold</b><div class="sub">→ the Workbench</div></div></div></div>
-      <div class="muted" style="font-size:11px;margin-top:9px">External engines are <b>mocked</b> in this demo; the pattern (Workflows + Auto Loader + UC functions wrapping the API calls) is the production design.</div></div>
+      <div class="mnw"><b>Minutes, not weeks.</b><span>The slip-to-capital-verdict round trip — today a multi-team, multi-day relay across systems — runs end-to-end while the underwriter waits.</span></div>
+      <div class="muted" style="font-size:11.5px;margin-top:10px">This kills the three things that make the existing stack slow: <b>data prep</b> (conform once, not per tool), <b>orchestration</b> (Workflows replace the manual hand-carry between systems), and <b>governance</b> — every hop above is captured as real Unity Catalog <b>lineage</b> and audited out of the box (<a href="#governance" style="color:#2563eb">see Governance ▸ lineage &amp; deal track</a>).</div>
+      <div class="muted" style="font-size:11px;margin-top:7px">External engines are <b>mocked</b> here; the pattern (Workflows + Auto Loader + UC functions wrapping the API calls) is the production design. Moving these engines <i>onto</i> Databricks can happen organically over time — it is not a precondition. Today we make your existing stack fast.</div></div>
     <h2 style="font-size:16px;margin:28px 0 2px">The live pipeline today</h2>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">What's actually running in this demo — quality-gated, with Document AI and geospatial accumulation. Every source above shares this exact pattern (Auto Loader · Structured Streaming · read_files · ai_query · Volumes).</p>
     <div id="ing-kpi" class="grid g4"></div>
