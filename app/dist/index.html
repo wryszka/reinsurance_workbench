@@ -144,6 +144,17 @@
   .srcbar code,.srcbar b code{font-family:ui-monospace,monospace;background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:#334155}
   .sqltog{color:var(--blue);cursor:pointer;font-weight:600}
   .sqlbox{display:none;margin-top:10px;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:13px 15px;font-family:ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;line-height:1.55}
+  /* "how this works — demo vs production" explainer (presenter aid) */
+  .explain{margin-top:14px;border:1px solid #ddd6fe;border-radius:11px;overflow:hidden;background:#faf5ff}
+  .explain .eh{padding:11px 15px;font-size:13px;font-weight:700;color:#6d28d9;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .explain .eh:hover{background:#f3e8ff}
+  .explain .eb{display:none;padding:2px 15px 14px}
+  .explain .col{margin-top:12px;border-left:3px solid var(--line);padding-left:12px}
+  .explain .col.demo{border-left-color:#d97706}.explain .col.prod{border-left-color:#2563eb}
+  .explain .lab{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  .explain .demo .lab{color:#b45309}.explain .prod .lab{color:#2563eb}
+  .explain .col p{margin:0;font-size:12.5px;line-height:1.6;color:#334155}
+  .explain code{font-family:ui-monospace,monospace;background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#334155;font-size:11.5px}
   /* landing / overview */
   .lhero{text-align:center;max-width:780px;margin:6px auto 0}
   .lhero .eyebrow{display:block}
@@ -526,6 +537,13 @@ SELECT fn_capital_impact('${sid}');        -- Marginal capital card        (THE 
 SELECT fn_recommendation('${sid}');        -- the bind / refer / decline call
 -- the what-if slider re-runs fn_accumulation_whatif(zone, limit, attachment) on each drag
 -- the supervisor box is a Mosaic AI agent that calls these same functions itself</div></div>
+    <div class="explain">
+      <div class="eh" onclick="toggleSql('exp-crux')">🔎 How the crux is computed — demo vs production <span class="muted" style="font-weight:400">click to expand ▾</span></div>
+      <div class="eb" id="exp-crux">
+        <div class="col demo"><div class="lab">In this demo</div><p>Marginal accumulation and capital are computed live by two <b>deterministic Unity Catalog functions</b> — <code>fn_accumulation_impact</code> and <code>fn_capital_impact</code> — transparent actuarial factor math, not a black box and not a simulation. Marginal peak-zone PML = the layer limit × an occupancy factor; marginal SCR = that PML × a capital factor, loaded for correlation with the in-force book; RoRAC = expected return ÷ marginal SCR against a 15% hurdle. Triage and price above <b>are</b> real MLflow models served on Mosaic AI; the cat curves are blended from three vendors. The data is synthetic and the coefficients are illustrative.</p></div>
+        <div class="col prod"><div class="lab">In production</div><p>The marginal PML comes from the <b>vendor catastrophe models</b> (e.g. Verisk, Moody's RMS) — the deal's layer interpolated against the peak-zone exceedance-probability (EP) curve, typically from a <b>Monte-Carlo simulation of event years</b> (ELT/YLT). The marginal SCR comes from the firm's <b>Solvency II capital model</b> (internal model or standard formula) with real cross-zone diversification, and RoRAC runs against the firm's own hurdle. Databricks <b>ingests and blends the vendor model output and calls the capital engine</b> — it never replaces them.</p></div>
+      </div>
+    </div>
     ${whatif?`<div style="margin-top:16px">${whatif}</div>`:''}
     <div class="grid g2" style="margin-top:16px">
       <div class="card" id="alt-card"><h3>Portfolio alternative</h3><span class="muted">loading…</span></div>
@@ -593,7 +611,14 @@ async function eventPage(arg){const m=$("#main");m.innerHTML='<div class="loadin
     <div id="ev-narr" class="narr" style="margin-top:16px"><span class="tag">Cat-Event agent</span><span class="muted">briefing the CRO…</span></div>
     <div class="card" style="margin-top:16px"><h3>Most exposed cedant</h3><b>${r.top_cedant}</b> — ${eurm(r.top_cedant_loss_eur)} ceded loss from this event</div>
     <div class="card" style="margin-top:16px"><h3>Which treaties respond</h3><div id="ev-treaties"><span class="muted">loading…</span></div></div>
-    <div class="prov">Cross-treaty loss, reinstatement and the capital hit are computed by <code>fn_event_response</code> on the live book — Databricks ingests the vendor event footprint, it does not run a cat engine.</div>`;
+    <div class="prov">Cross-treaty loss, reinstatement and the capital hit are computed by <code>fn_event_response</code> on the live book — Databricks ingests the vendor event footprint, it does not run a cat engine.</div>
+    <div class="explain">
+      <div class="eh" onclick="toggleSql('exp-event')">🔎 How the event response is computed — demo vs production <span class="muted" style="font-weight:400">click to expand ▾</span></div>
+      <div class="eb" id="exp-event">
+        <div class="col demo"><div class="lab">In this demo</div><p>A <b>deterministic UC function</b>, <code>fn_event_response</code>, matches a synthetic event footprint against each in-force treaty's attachment and limit to produce the gross/net loss, reinstatement income and the Solvency II hit. It is a <b>day-one modelled</b> view — arithmetic on the book, not a simulation — and the numbers are illustrative.</p></div>
+        <div class="col prod"><div class="lab">In production</div><p>The footprint is a <b>vendor post-event / real-time hazard layer</b> (e.g. Verisk, Moody's RMS, or a live met feed); the loss is the modelled gross-up of exposed limits, often <b>Monte-Carlo'd for uncertainty bands</b>. This day-one modelled view is what lets the CRO act overnight — <b>actual cedant-reported losses replace it over the following weeks</b> as claims develop.</p></div>
+      </div>
+    </div>`;
   api("/event/"+encodeURIComponent(eid)+"/narrate").then(n=>{$("#ev-narr").innerHTML=`<span class="tag">Cat-Event agent · ${n.cache||''}</span>${n.text||''}`;}).catch(()=>{$("#ev-narr").innerHTML='<span class="tag">Cat-Event agent</span><span class="muted">unavailable</span>';});
   api("/event/"+encodeURIComponent(eid)+"/treaties").then(td=>{EV_TD=td.treaties||[];
     const tot=EV_TD.reduce((a,x)=>a+Number(x.ceded_loss_eur||0),0);
