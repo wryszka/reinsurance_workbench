@@ -209,6 +209,11 @@
   .tlitem p{font-size:12.5px;color:#475569;margin:3px 0 0;line-height:1.5}
   .tlitem .src{font-size:10px;color:#94a3b8;font-family:ui-monospace,monospace;margin-top:3px;display:block}
   .modelcard{border:1px solid var(--line);border-top:3px solid #6d28d9;border-radius:12px;padding:16px;background:#fff}
+  /* orchestration handshake */
+  .hs h3{margin:0 0 10px}
+  .hstep{font-size:13px;color:#94a3b8;padding:6px 0;transition:color .2s;border-bottom:1px solid #f1f5f9}
+  .hstep.now{color:var(--blue);font-weight:600}
+  .hstep.done{color:#15803d}
   /* ingestion — source catalogue + live storm radar */
   .srcgrp{margin-top:18px}
   .srcgrp .gh{display:flex;align-items:baseline;gap:9px;margin-bottom:6px;flex-wrap:wrap}
@@ -233,6 +238,14 @@
   .storm .ctrls button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer}
   .storm .ctrls button:hover{background:rgba(255,255,255,.22)}
   .storm .ctrls .fire{background:#dc2626;border-color:#dc2626}
+  /* orchestration DAG */
+  .dag{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;margin-top:6px}
+  .dag .band{display:flex;flex-direction:column;gap:8px;justify-content:center}
+  .dag .node{border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:#fff;min-width:148px}
+  .dag .node b{font-size:12.5px}.dag .node .sub{font-size:10.5px;color:var(--mut)}
+  .dag .hub{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:0;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35}
+  .dag .eng{border-color:#fde68a;background:#fffbeb}
+  .dag .arrow{align-self:center;color:#94a3b8;font-size:20px;font-weight:700}
 </style>
 </head>
 <body>
@@ -283,6 +296,18 @@ function renderCacheBtn(){const b=document.getElementById("cacheBtn"),s=document
 function toggleCache(){CACHE_ON=!CACHE_ON;localStorage.setItem("re_cache",CACHE_ON?"on":"off");renderCacheBtn();}
 // presenter strip — a one-liner of what the page shows, shown at the top of every page
 const present=(t)=>`<div class="present"><span class="ptag">On this page</span><span>${t}</span></div>`;
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+// Orchestration handshake — Databricks packages the slip and calls the customer's own engines (mocked).
+const HS_CAT=["Compiling exposure data…","Calling Verisk Touchstone API…","Fetching marginal YELT (Year Event Loss Table)…","Marginal windstorm PML returned"];
+const HS_CAP=["Passing the marginal YELT to WTW Igloo…","Running 10,000 simulations…","Retrieving marginal SCR…","Calculating RoRAC vs hurdle…","Capital verdict returned"];
+let HS_T=null;
+function runHandshake(m,sid){let i=0;const steps=Math.max(HS_CAT.length,HS_CAP.length);
+  const col=(t,arr)=>`<div class="card hs"><h3>${t}</h3>${arr.map((s,j)=>`<div class="hstep ${j<i?'done':j===i?'now':''}">${j<i?'✓':j===i?'▸':'·'} ${s}</div>`).join('')}</div>`;
+  const render=()=>{m.innerHTML=`<div class="eyebrow">Underwriter · work a submission</div><h1>${sid}</h1>
+    <p class="sub">Orchestrating your engines — Databricks packages the structured slip and calls your cat &amp; capital models, then brings the numbers back to the desk.</p>
+    <div class="grid g2">${col('🌀 Catastrophe model · Verisk Touchstone',HS_CAT)}${col('🏛️ Capital model · WTW Igloo',HS_CAP)}</div>
+    <div class="note" style="margin-top:14px">Databricks is the <b>orchestration layer</b> — it doesn't replace your cat or capital engines, it connects them at the speed of the desk. <i>(the calls are mocked in this demo; the platform pattern is real)</i></div>`;};
+  render();clearInterval(HS_T);HS_T=setInterval(()=>{i++;if(i>steps){clearInterval(HS_T);return;}render();},460);}
 
 function renderNav(){let route=(location.hash||"#home").slice(1).split("/")[0];
   if(route==='sub')route='queue';  // a submission detail lives under the Renewal Desk
@@ -550,8 +575,10 @@ async function runWhatif(sid,limit){const out=$("#wi-out");if(!out)return;
     <div class="kv"><span>${r.breaches_appetite?'Breach':'Headroom'}</span><b style="color:${r.breaches_appetite?'#dc2626':'#16a34a'}">${eurm(r.breaches_appetite?r.breach_amount_eur:r.headroom_after_eur)}</b></div>`;}
 
 // ─────────── Work a submission (HERO decision view) ───────────
-async function subView(sid){const m=$("#main");m.innerHTML='<div class="loading">Scoring '+sid+' on live UC functions…</div>';DEC_SID=sid;
-  const d=await api("/submission/"+encodeURIComponent(sid)+"/decision");
+async function subView(sid){const m=$("#main");DEC_SID=sid;
+  runHandshake(m,sid);  // visible orchestration handshake while the UC functions run
+  const d=(await Promise.all([api("/submission/"+encodeURIComponent(sid)+"/decision"), sleep(2700)]))[0];
+  clearInterval(HS_T);
   const s=d.summary||{},t=d.triage||{},p=d.price||{},a=d.accumulation||{},cp=d.capital||{};
   const recCol=d.recommendation==='recommend-to-bind'?'green':d.recommendation==='decline'?'red':'amber';
   const accRed=a.breaches_appetite, capRed=cp.capital_destructive;
@@ -758,6 +785,22 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
     ${present('The full ingestion picture — every source by purpose and method, a live storm radar (consume geo data, track the event, react in real time), and the real quality-gated pipeline running today. New sources are mock, ready to wire.')}
     <div class="card storm" id="stormCard"><span class="muted" style="color:#94a3b8">loading live event radar…</span></div>
     <div id="ing-sources"><span class="muted">loading source catalogue…</span></div>
+    <div class="card" style="margin-top:18px"><h3>🔗 Orchestration architecture — Databricks as the chassis between your systems</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">We don't replace your policy, cat or capital systems — we <b>orchestrate</b> them. The slip and exposure go out to your cat &amp; capital engines; the modelled numbers come straight back to the underwriter's desk.</div>
+      <div class="dag">
+        <div class="band">
+          <div class="node"><b>Sapiens / SAP</b><div class="sub">policy &amp; in-force</div></div>
+          <div class="node"><b>MRC slips</b><div class="sub">Document AI</div></div>
+          <div class="node"><b>Bordereaux · Exposure</b><div class="sub">Auto Loader</div></div></div>
+        <div class="arrow">→</div>
+        <div class="band"><div class="node hub">Databricks<br>Lakehouse + Workflows<br><span style="font-weight:400;font-size:10px">orchestrator</span></div></div>
+        <div class="arrow">⇄</div>
+        <div class="band">
+          <div class="node eng"><b>Verisk Touchstone</b><div class="sub">→ marginal YELT</div></div>
+          <div class="node eng"><b>WTW Igloo / Tyche</b><div class="sub">→ marginal SCR</div></div></div>
+        <div class="arrow">→</div>
+        <div class="band"><div class="node"><b>Delta gold</b><div class="sub">→ the Workbench</div></div></div></div>
+      <div class="muted" style="font-size:11px;margin-top:9px">External engines are <b>mocked</b> in this demo; the pattern (Workflows + Auto Loader + UC functions wrapping the API calls) is the production design.</div></div>
     <h2 style="font-size:16px;margin:28px 0 2px">The live pipeline today</h2>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">What's actually running in this demo — quality-gated, with Document AI and geospatial accumulation. Every source above shares this exact pattern (Auto Loader · Structured Streaming · read_files · ai_query · Volumes).</p>
     <div id="ing-kpi" class="grid g4"></div>
