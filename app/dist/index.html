@@ -353,7 +353,12 @@ function landing(){const m=$("#main");
     </div>`;}
 
 // ─────────── Control Tower (CRO — the bookend) ───────────
-async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">Loading control tower…</div>';
+let CT_TAB='capacity';
+function setCtTab(t){CT_TAB=t;portfolio();}
+const ctTabs=()=>`<div class="tabs"><div class="tab ${CT_TAB==='capacity'?'on':''}" onclick="setCtTab('capacity')">📊 Capacity & capital</div><div class="tab ${CT_TAB==='business'?'on':''}" onclick="setCtTab('business')">🔭 Business view</div></div>`;
+async function portfolio(){const m=$("#main");
+  if(CT_TAB==='business')return ctBusiness(m);
+  m.innerHTML='<div class="loading">Loading control tower…</div>';
   const d=await api("/control-tower");
   const zones=d.zones.map(z=>{const u=Number(z.utilisation_pct);const col=z.rag;
     return `<div class="card drill" onclick="zoneDrill('${z.zone_id}')"><h3>${z.zone_name}</h3>
@@ -374,6 +379,7 @@ async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">
   m.innerHTML=`<div class="eyebrow">CRO Control Tower</div><h1>The book at a glance</h1>
     <p class="sub">Peak-zone capacity versus appetite at the 1-in-200, blended across vendor cat output, with the Solvency II capital cross-link.</p>
     ${present('The CRO book at a glance — peak-zone capacity vs appetite at the 1-in-200, blended across three cat vendors, with the Solvency II capital cross-link. Open and close the demo here.')}
+    ${ctTabs()}
     ${evBanner}${seasonBanner}
     <div class="freshbar"><span class="dot"></span> Live from the gold marts — built by the medallion pipeline at <code>${meta.built_at||'—'}</code>, queried just now at <code>${meta.queried_at||'—'}</code>. <b>Every tile is clickable: drill to the rows it is computed from.</b></div>
     <div class="grid g3" style="margin-top:14px">${zones}</div>
@@ -384,6 +390,39 @@ async function portfolio(){const m=$("#main");m.innerHTML='<div class="loading">
     </div>
     <div class="note">Cat output is blended across ${d.cat_curves.length? '3 vendors that disagree by ~'+pct(d.cat_curves[0].divergence_pct):'multiple vendors'} at the 1-in-200. Databricks ingests and blends vendor EP curves — it never runs a cat engine. <i>Click any peak-zone tile to see the three vendor curves and the treaties that sum to the book PML.</i></div>
     <div class="prov">One deal normally touches a placement tool, a separate exposure tool, a bordereaux process, a BI stack, and a spreadsheet for the capital call — here it is one platform.</div>`;}
+
+// ─────────── Control Tower · Business view — in-app Genie + executive dashboard ───────────
+async function ctBusiness(m){
+  m.innerHTML=`<div class="eyebrow">CRO Control Tower</div><h1>The book at a glance</h1>
+    <p class="sub">The high-level business view — ask the book in plain language, and the executive dashboard over the gold marts.</p>
+    ${present('The high-level view of the business — Ask the Portfolio (AI/BI Genie, answered in-app) and the executive dashboard over the gold marts.')}
+    ${ctTabs()}
+    <div class="askbox" style="background:linear-gradient(135deg,#0e7490 0%,#0891b2 55%,#06b6d4 100%);box-shadow:0 10px 30px rgba(8,145,178,.28)">
+      <h2>💬 Ask the Portfolio — AI/BI Genie</h2>
+      <div class="sb">Ask the book in plain language. A real Databricks <b>AI/BI Genie</b> space over the gold marts — answered right here in the app, with the SQL it generated.</div>
+      <div class="exs" id="genie-exs"><span style="color:#cffafe;font-size:12px">loading examples…</span></div>
+      <div class="row"><input id="g-q" placeholder="Ask about the portfolio…" value="Which peak zone is closest to its appetite right now?"/>
+        <button class="go" onclick="askGenie()">Ask →</button></div>
+      <div id="g-a"></div></div>
+    <div id="ct-dash" style="margin-top:16px"><div class="card"><span class="muted">loading executive dashboard…</span></div></div>`;
+  api("/genie/examples").then(d=>{const e=$("#genie-exs");if(e)e.innerHTML=(d.examples||[]).map(q=>`<span class="ex" onclick="genieEx(this)">${q}</span>`).join('');}).catch(()=>{});
+  api("/control-tower").then(renderCtDash).catch(()=>{});}
+function genieEx(el){$("#g-q").value=el.textContent;askGenie();}
+async function askGenie(){const q=$("#g-q").value;const o=$("#g-a");o.innerHTML='<div class="ans"><span class="muted">Genie is querying the gold marts live… (~10–15s)</span></div>';
+  try{const r=await api("/genie/ask?q="+encodeURIComponent(q));
+    if(r.error){o.innerHTML=`<div class="ans"><span class="muted">${r.error}</span></div>`;return;}
+    const tbl=(r.columns&&r.columns.length&&r.rows&&r.rows.length)?`<div class="tscroll" style="margin-top:10px"><table><thead><tr>${r.columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${r.rows.map(row=>`<tr>${row.map(v=>`<td>${v==null?'':v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'';
+    const sql=r.sql?`<div style="margin-top:8px"><span class="sqltog" onclick="toggleSql('g-sql')">▸ show the SQL Genie generated</span><div class="sqlbox" id="g-sql">${r.sql.replace(/</g,'&lt;')}</div></div>`:'';
+    o.innerHTML=`<div class="ans"><div class="narr" style="margin:0"><span class="tag">AI/BI Genie · live over the gold marts</span>${r.text||'(no answer)'}</div>${tbl}${sql}</div>`;}
+  catch(e){o.innerHTML='<div class="ans"><span class="muted">Genie unavailable</span></div>';}}
+function renderCtDash(d){const el=$("#ct-dash");if(!el)return;const c=d.capital||{};
+  const kpi=(l,v,c2)=>`<div class="card"><h3>${l}</h3><div class="big" ${c2?`style="color:${c2}"`:''}>${v}</div></div>`;
+  const zr=(d.zones||[]).map(z=>`<tr><td>${z.zone_name}</td><td>${z.peril}</td><td>${eurm(z.current_pml_1in200_eur)}</td><td>${eurm(z.appetite_pml_1in200_eur)}</td><td>${pct(z.utilisation_pct)}</td><td><span class="pill ${z.rag}">${z.rag}</span></td></tr>`).join("");
+  el.innerHTML=`<div id="ct-dashboard"></div>
+    <div class="sech">Executive summary <span class="cnt">· live from the gold marts</span></div>
+    <div class="grid g3">${kpi('Solvency II ratio',pct(c.solvency_ratio_pct),'#16a34a')}${kpi('Diversified BSCR',eurm(c.diversified_bscr_eur))}${kpi('Eligible own funds',eurm(c.eligible_own_funds_eur))}</div>
+    <div class="card" style="margin-top:16px"><h3>Peak-zone capacity</h3><table><thead><tr><th>Zone</th><th>Peril</th><th>1-in-200 PML</th><th>Appetite</th><th>Utilisation</th><th>RAG</th></tr></thead><tbody>${zr}</tbody></table></div>`;
+  if(typeof renderDashboardEmbed==='function')renderDashboardEmbed();}
 
 // ─────────── Control-tower drill-downs — prove the tiles are computed, not hardcoded ───────────
 function openModal(html){let r=$("#modalRoot");if(!r){r=document.createElement("div");r.id="modalRoot";document.body.appendChild(r);}

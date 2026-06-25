@@ -335,6 +335,49 @@ def ingestion_geo():
         ORDER BY total_tiv_eur DESC""")}
 
 
+# ─────────── Ask the Portfolio — real AI/BI Genie, surfaced in-app ───────────
+GENIE_EXAMPLES = [
+    "Which peak zone is closest to its appetite right now?",
+    "What is our European windstorm 1-in-200 PML versus appetite?",
+    "How many in-force treaties do we have by peak zone?",
+    "What is the current Solvency II ratio and diversified BSCR?",
+    "Which cedant has the largest ceded premium?",
+]
+
+
+@app.get("/api/genie/examples")
+def genie_examples():
+    return {"examples": GENIE_EXAMPLES, "space": config.GENIE_SPACE_ID,
+            "title": "Ask the Portfolio", "configured": bool(config.GENIE_SPACE_ID)}
+
+
+@app.get("/api/genie/ask")
+def genie_ask(q: str):
+    space = config.GENIE_SPACE_ID
+    if not space:
+        return {"error": "Genie space not configured."}
+    try:
+        w = config.get_workspace_client()
+        msg = w.genie.start_conversation_and_wait(space, q)
+        text, sql_text, cols, rows = "", "", [], []
+        for a in (msg.attachments or []):
+            if getattr(a, "text", None) and a.text and a.text.content:
+                text = a.text.content
+            if getattr(a, "query", None) and a.query:
+                sql_text = a.query.query or ""
+        try:
+            qr = w.genie.get_message_query_result(space, msg.conversation_id, msg.id)
+            sr = getattr(qr, "statement_response", None)
+            if sr and sr.result and sr.manifest:
+                cols = [c.name for c in sr.manifest.schema.columns]
+                rows = (sr.result.data_array or [])[:25]
+        except Exception:
+            pass
+        return {"text": text, "sql": sql_text, "columns": cols, "rows": rows, "space": space}
+    except Exception as e:
+        return {"error": str(e)[:200]}
+
+
 # ─────────── source catalogue (the full ingestion picture; new sources are MOCK, expandable) ───────────
 # status: live = a real feed in this demo (row count + DQ pulled); mock = illustrative, not yet wired; roadmap = pattern.
 _SOURCE_GROUPS = [
