@@ -422,7 +422,15 @@ function renderCtDash(d){const el=$("#ct-dash");if(!el)return;const c=d.capital|
     <div class="sech">Executive summary <span class="cnt">· live from the gold marts</span></div>
     <div class="grid g3">${kpi('Solvency II ratio',pct(c.solvency_ratio_pct),'#16a34a')}${kpi('Diversified BSCR',eurm(c.diversified_bscr_eur))}${kpi('Eligible own funds',eurm(c.eligible_own_funds_eur))}</div>
     <div class="card" style="margin-top:16px"><h3>Peak-zone capacity</h3><table><thead><tr><th>Zone</th><th>Peril</th><th>1-in-200 PML</th><th>Appetite</th><th>Utilisation</th><th>RAG</th></tr></thead><tbody>${zr}</tbody></table></div>`;
-  if(typeof renderDashboardEmbed==='function')renderDashboardEmbed();}
+  renderDashboardEmbed();}
+function renderDashboardEmbed(){const el=$("#ct-dashboard");if(!el)return;const u=CFG.dashboard_url;
+  if(!u){el.innerHTML='';return;}
+  el.innerHTML=`<div class="card" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;border:0">
+     <div style="font-size:30px">📊</div>
+     <div style="flex:1;min-width:240px"><div class="eyebrow" style="color:#c4b5fd">AI/BI dashboard</div>
+       <div style="font-size:16px;font-weight:700">Bricksurance Re — Executive View</div>
+       <div class="muted" style="color:#cbd5e1;font-size:12.5px">A real Databricks AI/BI (Lakeview) dashboard over the gold marts — peak-zone PML vs appetite, capital, cat-vendor divergence and the renewal pipeline.</div></div>
+     <a class="btn" style="text-decoration:none;white-space:nowrap" href="${u}" target="_blank" rel="noopener">Open the dashboard ↗</a></div>`;}
 
 // ─────────── Control-tower drill-downs — prove the tiles are computed, not hardcoded ───────────
 function openModal(html){let r=$("#modalRoot");if(!r){r=document.createElement("div");r.id="modalRoot";document.body.appendChild(r);}

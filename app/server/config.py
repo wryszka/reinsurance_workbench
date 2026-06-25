@@ -13,6 +13,7 @@ SCHEMA = os.getenv("SCHEMA_NAME", "bricksurance_re")
 WAREHOUSE_ID = os.getenv("WAREHOUSE_ID", "a3b61648ea4809e3")
 USE_CACHE = _flag("USE_CACHE", True)
 GENIE_SPACE_ID = os.getenv("GENIE_SPACE_ID", "")
+DASHBOARD_ID = os.getenv("DASHBOARD_ID", "")
 FM_ENDPOINT = os.getenv("FM_ENDPOINT", "databricks-claude-sonnet-4-6")
 
 # Agent / model endpoints are resolved by substring at runtime (dev-prefix safe).
