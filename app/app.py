@@ -339,6 +339,64 @@ def ingestion_geo():
         ORDER BY total_tiv_eur DESC""")}
 
 
+# ─────────── Cat-model output at scale — a YELT in Delta, queried against the live book ───────────
+@app.get("/api/yelt/summary")
+def yelt_summary():
+    y = config.fqn("cat_yelt")
+    r = sql.query_many({
+        "stat": f"SELECT count(*) rows, count(DISTINCT trial_id) trials, count(DISTINCT event_id) events, "
+                f"max(trial_id) n_years FROM {y}",
+        "byzone": f"SELECT zone_id, peril, region, count(*) n_losses, "
+                  f"CAST(round(avg(gross_loss_eur)) AS double) avg_loss, CAST(max(gross_loss_eur) AS double) max_loss "
+                  f"FROM {y} GROUP BY zone_id, peril, region ORDER BY n_losses DESC",
+    })
+    size = {}
+    try:
+        d = sql.query_one(f"DESCRIBE DETAIL {y}")
+        if d:
+            size = {"size_bytes": d.get("sizeInBytes"), "num_files": d.get("numFiles")}
+    except Exception:
+        pass
+    return {"stat": sql.first(r["stat"]) or {}, "byzone": r["byzone"], "size": size, "table": y}
+
+
+@app.get("/api/yelt/ep")
+def yelt_ep():
+    import time as _t
+    y = config.fqn("cat_yelt"); t = config.fqn("inforce_treaties")
+    n = int((sql.query_one(f"SELECT max(trial_id) m FROM {y}") or {}).get("m") or 100000)
+    ep_sql = f"""
+    WITH zone_layer AS (
+      SELECT zone_id, SUM(limit_eur) AS zone_limit,
+             CAST(ROUND(SUM(attachment_eur*limit_eur)/SUM(limit_eur)) AS BIGINT) AS zone_attach
+      FROM {t} WHERE structure = 'Cat XoL' GROUP BY zone_id),
+    ev AS (
+      SELECT y.trial_id,
+             LEAST(GREATEST(y.gross_loss_eur - z.zone_attach, 0), z.zone_limit) AS ceded_eur
+      FROM {y} y JOIN zone_layer z USING (zone_id)),
+    by_year AS (SELECT trial_id, SUM(ceded_eur) AS aep, MAX(ceded_eur) AS oep FROM ev GROUP BY trial_id),
+    all_trials AS (SELECT explode(sequence(1, {n})) AS trial_id),
+    dens AS (SELECT a.trial_id, COALESCE(b.aep, 0) AS aep, COALESCE(b.oep, 0) AS oep
+             FROM all_trials a LEFT JOIN by_year b USING (trial_id))
+    SELECT CAST(percentile(oep, 0.99) AS double) oep100, CAST(percentile(oep, 0.995) AS double) oep200,
+           CAST(percentile(oep, 0.996) AS double) oep250, CAST(percentile(aep, 0.99) AS double) aep100,
+           CAST(percentile(aep, 0.995) AS double) aep200, CAST(percentile(aep, 0.996) AS double) aep250,
+           CAST(avg(aep) AS double) aal, CAST(max(oep) AS double) worst FROM dens"""
+    t0 = _t.time(); row = sql.query_one(ep_sql); ms = int((_t.time() - t0) * 1000)
+    zone_sql = f"""
+    WITH zl AS (SELECT zone_id, SUM(limit_eur) zlim, CAST(ROUND(SUM(attachment_eur*limit_eur)/SUM(limit_eur)) AS BIGINT) zatt
+                FROM {t} WHERE structure = 'Cat XoL' AND zone_id IN (SELECT DISTINCT zone_id FROM {y}) GROUP BY zone_id),
+    ev AS (SELECT y.zone_id, y.trial_id, LEAST(GREATEST(y.gross_loss_eur - z.zatt, 0), z.zlim) ceded
+           FROM {y} y JOIN zl z USING (zone_id)),
+    ymax AS (SELECT zone_id, trial_id, MAX(ceded) oep FROM ev GROUP BY zone_id, trial_id),
+    zlist AS (SELECT DISTINCT zone_id FROM zl),
+    allt AS (SELECT zone_id, explode(sequence(1, {n})) trial_id FROM zlist),
+    dens AS (SELECT a.zone_id, COALESCE(m.oep, 0) oep FROM allt a LEFT JOIN ymax m USING (zone_id, trial_id))
+    SELECT zone_id, CAST(percentile(oep, 0.995) AS double) oep200, CAST(avg(oep) AS double) mean_oep
+    FROM dens GROUP BY zone_id ORDER BY oep200 DESC"""
+    return {"ep": row or {}, "elapsed_ms": ms, "n_trials": n, "zones": sql.query(zone_sql), "table": y}
+
+
 # ─────────── Ask the Portfolio — real AI/BI Genie, surfaced in-app ───────────
 GENIE_EXAMPLES = [
     "Which peak zone is closest to its appetite right now?",

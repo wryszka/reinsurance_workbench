@@ -253,6 +253,10 @@
   .dagcap .step.s1{background:#eff6ff;border-color:#bfdbfe}.dagcap .step.s2{background:#eef2ff;border-color:#c7d2fe}.dagcap .step.s3{background:#ecfdf5;border-color:#a7f3d0}
   .mnw{display:flex;align-items:center;gap:10px;margin-top:12px;padding:9px 13px;border-radius:9px;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff}
   .mnw b{font-size:14px}.mnw span{font-size:11.5px;color:#cbd5e1}
+  .ystat{border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fff}
+  .ystat .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#64748b;font-weight:700}
+  .ystat .v{font-size:21px;font-weight:800;color:#0f172a;margin-top:2px}
+  .yhd{font-weight:700;font-size:13px;margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -833,6 +837,7 @@ async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loa
       <div class="mnw"><b>Minutes, not weeks.</b><span>The slip-to-capital-verdict round trip — today a multi-team, multi-day relay across systems — runs end-to-end while the underwriter waits.</span></div>
       <div class="muted" style="font-size:11.5px;margin-top:10px">This kills the three things that make the existing stack slow: <b>data prep</b> (conform once, not per tool), <b>orchestration</b> (Workflows replace the manual hand-carry between systems), and <b>governance</b> — every hop above is captured as real Unity Catalog <b>lineage</b> and audited out of the box (<a href="#governance" style="color:#2563eb">see Governance ▸ lineage &amp; deal track</a>).</div>
       <div class="muted" style="font-size:11px;margin-top:7px">External engines are <b>mocked</b> here; the pattern (Workflows + Auto Loader + UC functions wrapping the API calls) is the production design. Moving these engines <i>onto</i> Databricks can happen organically over time — it is not a precondition. Today we make your existing stack fast.</div></div>
+    <div id="ing-yelt"></div>
     <h2 style="font-size:16px;margin:28px 0 2px">The live pipeline today</h2>
     <p class="muted" style="font-size:12.5px;margin:0 0 10px">What's actually running in this demo — quality-gated, with Document AI and geospatial accumulation. Every source above shares this exact pattern (Auto Loader · Structured Streaming · read_files · ai_query · Volumes).</p>
     <div id="ing-kpi" class="grid g4"></div>
@@ -859,6 +864,7 @@ ORDER  BY layer, table_name;</div></div></div>
       (d.rules||[]).map(r=>`<tr><td><span class="pill ${r.layer==='bronze'?'amber':r.layer==='silver'?'':'green'}">${r.layer}</span></td><td>${r.table_name}</td><td><b>${r.expectation}</b></td><td class="muted" style="font-size:11px">${r.predicate}</td><td>${r.passing_records}</td><td style="${Number(r.failing_records)>0?'color:#dc2626;font-weight:700':''}">${r.failing_records}</td><td>${pct(r.pass_rate_pct)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">scorecard building…</td></tr>'}</tbody></table>`;
   }).catch(()=>{$("#ing-rules").innerHTML='<span class="muted">scorecard unavailable</span>';});
   loadStorm();
+  loadYelt();
   api("/ingestion/sources").then(renderSources).catch(()=>{$("#ing-sources").innerHTML='<span class="muted">source catalogue unavailable</span>';});
   api("/ingestion/document").then(d=>{const ex=d.extractions||[];const top=ex[0],low=ex[ex.length-1];
     const card=(e,tag)=>e?`<div class="card" style="background:#faf5ff"><div class="eyebrow">${tag} · confidence ${e.extraction_confidence}</div>
@@ -909,6 +915,50 @@ function renderSources(d){const el=$("#ing-sources");if(!el)return;
      <div><div class="eyebrow" style="color:#c4b5fd">Source catalogue</div><div class="big" style="color:#fff">${d.n_live} live · ${d.n_mock} ready to wire</div><div class="muted" style="color:#cbd5e1">grouped by what they are for</div></div>
      <div class="muted" style="color:#cbd5e1;max-width:540px;font-size:12.5px">${d.note||''}</div></div>
     ${(d.groups||[]).map(grp).join('')}`;}
+
+// ── Cat-model output at scale — a real YELT in Delta, queried live against the in-force book ──
+const YELT_SQL=`-- Apply the in-force Cat XoL layers to every simulated loss, then build the EP curve
+WITH zone_layer AS (              -- the book's occurrence layer per peak zone
+  SELECT zone_id, SUM(limit_eur) AS zone_limit,
+         ROUND(SUM(attachment_eur*limit_eur)/SUM(limit_eur)) AS zone_attach
+  FROM inforce_treaties WHERE structure = 'Cat XoL' GROUP BY zone_id),
+ev AS (                           -- ceded recovery for each of the ~480k simulated events
+  SELECT y.trial_id,
+         LEAST(GREATEST(y.gross_loss_eur - z.zone_attach, 0), z.zone_limit) AS ceded_eur
+  FROM cat_yelt y JOIN zone_layer z USING (zone_id)),
+by_year AS (                      -- collapse to one row per simulated year
+  SELECT trial_id, SUM(ceded_eur) AS aep, MAX(ceded_eur) AS oep FROM ev GROUP BY trial_id)
+-- densify with the zero-loss years, then read the return periods off the distribution
+SELECT percentile(oep,0.995) AS oep_1in200,   -- the Solvency II 1-in-200
+       percentile(aep,0.995) AS aep_1in200,
+       avg(aep)              AS aal
+FROM   by_year RIGHT JOIN (SELECT explode(sequence(1,100000)) trial_id) USING (trial_id);`;
+async function loadYelt(){const el=$("#ing-yelt");if(!el)return;
+  try{const [s,e]=await Promise.all([api("/yelt/summary"),api("/yelt/ep")]);
+    const st=s.stat||{},sz=s.size||{},ep=e.ep||{};
+    const num=v=>v==null?'—':Number(v).toLocaleString('en-GB');
+    const mb=sz.size_bytes?(Number(sz.size_bytes)/1048576).toFixed(1)+' MB · '+num(sz.num_files)+' files':'—';
+    const rp=(lab,o,a,hi)=>`<tr${hi?' style="background:#eef2ff"':''}><td>${lab}</td><td><b>${eurm(o)}</b></td><td>${eurm(a)}</td></tr>`;
+    const zr=(e.zones||[]).map(z=>`<tr><td>${z.zone_id}</td><td><b>${eurm(z.oep200)}</b></td><td class="muted">${eurm(z.mean_oep)}</td></tr>`).join('');
+    el.innerHTML=`<div class="card" style="margin-top:18px"><h3>🌪 Cat-model output at scale — the YELT, landed in Delta</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Cat models (Verisk Touchstone, Moody's RMS) emit <b>YELTs / PLTs</b> — Year / Period Event Loss Tables, huge datasets of simulated event losses. Databricks ingests them into <b>Delta Lake</b> and queries them <b>against the live in-force book</b> to derive the loss distribution — in seconds, not an overnight batch on someone's workstation. This one covers the <b>European cat book</b> (windstorm + flood) — the zones the book reinsures with occurrence Cat XoL; new perils land in the same table.</div>
+      <div class="grid g4">
+        <div class="ystat"><div class="k">Simulated losses</div><div class="v">${num(st.rows)}</div></div>
+        <div class="ystat"><div class="k">Trial years</div><div class="v">${num(st.trials)}</div></div>
+        <div class="ystat"><div class="k">Stochastic events</div><div class="v">${num(st.events)}</div></div>
+        <div class="ystat"><div class="k">Delta table</div><div class="v" style="font-size:15px;padding-top:5px">${mb}</div></div></div>
+      <div class="grid g2" style="margin-top:14px">
+        <div><div class="yhd">Book exceedance-probability (EP) curve</div>
+          <table><thead><tr><th>Return period</th><th>OEP · worst event</th><th>AEP · annual agg.</th></tr></thead>
+          <tbody>${rp('1-in-100',ep.oep100,ep.aep100)}${rp('1-in-200 · Solvency II',ep.oep200,ep.aep200,true)}${rp('1-in-250',ep.oep250,ep.aep250)}</tbody></table>
+          <div class="muted" style="font-size:11.5px;margin-top:6px">Average annual loss <b>${eurm(ep.aal)}</b> · worst simulated year <b>${eurm(ep.worst)}</b> (the program exhausts).</div></div>
+        <div><div class="yhd">1-in-200 OEP by peak zone</div>
+          <table><thead><tr><th>Zone</th><th>1-in-200 OEP</th><th>Mean</th></tr></thead><tbody>${zr||'<tr><td colspan=3 class="muted">—</td></tr>'}</tbody></table>
+          <div class="muted" style="font-size:11.5px;margin-top:6px">EU windstorm 1-in-200 of <b>${eurm((e.zones&&e.zones[0])?e.zones[0].oep200:null)}</b> sits just under the €500m zone appetite.</div></div></div>
+      <div class="srcbar"><b>Computed live — not stored.</b> The in-force Cat XoL layers (attachment / limit from <code>inforce_treaties</code>) applied to all <b>${num(st.rows)}</b> simulated losses in <code>cat_yelt</code>, collapsed to a per-year distribution and read at the return periods — <b>${num(e.elapsed_ms)} ms</b> on serverless SQL. <span class="sqltog" onclick="toggleSql('sql-yelt')">▸ show the SQL</span>
+        <div class="sqlbox" id="sql-yelt">${YELT_SQL.replace(/</g,'&lt;')}</div></div>
+      <div class="muted" style="font-size:11px;margin-top:8px">The <i>marginal</i> version of this query — what one new treaty does to the 1-in-200 — is <a href="#sub/sub:900002" style="color:#2563eb">the crux</a>. Synthetic vendor-style YELT (100,000-year sim); production tables run to hundreds of millions of rows — same Delta table, same query, it just scales out.</div></div>`;
+  }catch(err){el.innerHTML='';}}
 
 // ─────────── Reinsurance AI roster ───────────
 const AIGLYPH={supervisor:'🧠',genie:'💬',tool:'⚙️'};
