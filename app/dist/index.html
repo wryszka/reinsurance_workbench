@@ -209,6 +209,30 @@
   .tlitem p{font-size:12.5px;color:#475569;margin:3px 0 0;line-height:1.5}
   .tlitem .src{font-size:10px;color:#94a3b8;font-family:ui-monospace,monospace;margin-top:3px;display:block}
   .modelcard{border:1px solid var(--line);border-top:3px solid #6d28d9;border-radius:12px;padding:16px;background:#fff}
+  /* ingestion — source catalogue + live storm radar */
+  .srcgrp{margin-top:18px}
+  .srcgrp .gh{display:flex;align-items:baseline;gap:9px;margin-bottom:6px;flex-wrap:wrap}
+  .srcgrp .gh b{font-size:14px}
+  .srcgrp .gh .why{font-size:12px;color:var(--mut)}
+  .stat{display:inline-block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:5px}
+  .stat.live{background:#dcfce7;color:#15803d}.stat.mock{background:#fef3c7;color:#b45309}.stat.roadmap{background:#e2e8f0;color:#475569}
+  .storm{background:linear-gradient(135deg,#0c1322,#1e293b);color:#fff;border:0}
+  .storm .top{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .storm .live-dot{width:9px;height:9px;border-radius:50%;background:#f87171;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(248,113,113,.6)}70%{box-shadow:0 0 0 9px rgba(248,113,113,0)}100%{box-shadow:0 0 0 0 rgba(248,113,113,0)}}
+  .storm .track{display:flex;gap:0;margin:15px 0 4px;overflow-x:auto}
+  .storm .fr{flex:1;min-width:92px;text-align:center;padding:8px 6px;border-top:3px solid rgba(255,255,255,.15);cursor:pointer}
+  .storm .fr.on{border-top-color:#f87171}
+  .storm .fr .ft{font-size:10px;color:#93a3b8;font-weight:700}
+  .storm .fr .fp{font-size:10.5px;color:#cbd5e1;margin-top:2px}
+  .storm .panel{display:flex;gap:26px;flex-wrap:wrap;margin-top:10px;background:rgba(255,255,255,.05);border-radius:11px;padding:14px 16px}
+  .storm .panel .v{font-size:22px;font-weight:800}
+  .storm .panel .l{font-size:10.5px;color:#94a3b8}
+  .storm .snote{font-size:12.5px;color:#e2e8f0;margin-top:11px;min-height:18px}
+  .storm .ctrls{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .storm .ctrls button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .storm .ctrls button:hover{background:rgba(255,255,255,.22)}
+  .storm .ctrls .fire{background:#dc2626;border-color:#dc2626}
 </style>
 </head>
 <body>
@@ -680,12 +704,16 @@ FROM   fn_event_response('${EV_EID}');</div></div>`);}
 
 // ─────────── Ingestion (feed map · quality scorecard · Document AI · geo · quarantine) ───────────
 const TYPE_COL={document:'#6d28d9','file · schema-drift':'#d97706',geospatial:'#0891b2','streaming · JSON':'#16a34a',vendor:'#2563eb',structured:'#475569',internal:'#475569'};
+let STORM=null, STORM_I=0, STORM_T=null;
 async function intake(){const m=$("#main");m.innerHTML='<div class="loading">Loading ingestion…</div>';
-  m.innerHTML=`<div class="eyebrow">Data Ingestion — Unity Catalog + Lakeflow</div><h1>The front door — every feed, every rule</h1>
-    <p class="sub">Structured feeds, vendor cat output, geospatial exposure, a streaming event footprint, and the genuinely hard one — unstructured MRC slips read by Document AI. Every feed is quality-gated; the scorecard is computed from the live DLT event log.</p>
-    ${present('Every feed by type — structured, vendor cat output, geospatial, a streaming event footprint, and unstructured MRC slips read by Document AI. The quality scorecard is computed live from the pipeline event log.')}
+  m.innerHTML=`<div class="eyebrow">Data Ingestion — Unity Catalog + Lakeflow</div><h1>The front door — dozens of feeds, from quarterly bordereaux to a live storm</h1>
+    <p class="sub">Ingestion is the foundation: the history and exposure that <b>build the models</b>, and the live geo feeds that tell us — in near-real-time — that <b>the storm has hit</b>, so we can react in minutes, not days.</p>
+    ${present('The full ingestion picture — every source by purpose and method, a live storm radar (consume geo data, track the event, react in real time), and the real quality-gated pipeline running today. New sources are mock, ready to wire.')}
+    <div class="card storm" id="stormCard"><span class="muted" style="color:#94a3b8">loading live event radar…</span></div>
+    <div id="ing-sources"><span class="muted">loading source catalogue…</span></div>
+    <h2 style="font-size:16px;margin:28px 0 2px">The live pipeline today</h2>
+    <p class="muted" style="font-size:12.5px;margin:0 0 10px">What's actually running in this demo — quality-gated, with Document AI and geospatial accumulation. Every source above shares this exact pattern (Auto Loader · Structured Streaming · read_files · ai_query · Volumes).</p>
     <div id="ing-kpi" class="grid g4"></div>
-    <div class="card" style="margin-top:16px"><h3>Source / feed map</h3><div id="ing-feeds"><span class="muted">loading…</span></div></div>
     <div class="card" style="margin-top:16px"><h3>🧠 Document AI — unstructured MRC slip → structured fields</h3>
       <div class="muted" style="font-size:12.5px">Reinsurers re-key slips by hand today. Here <code>ai_query</code> (Claude) extracts the fields from the slip text on a UC Volume, with a confidence gate that quarantines weak extractions.</div>
       <div id="ing-doc" style="margin-top:10px"><span class="muted">loading…</span></div></div>
@@ -708,8 +736,8 @@ ORDER  BY layer, table_name;</div></div></div>
     $("#ing-rules").innerHTML=`<table><thead><tr><th>Layer</th><th>Table</th><th>Expectation</th><th>Rule</th><th>Pass</th><th>Fail</th><th>%</th></tr></thead><tbody>${
       (d.rules||[]).map(r=>`<tr><td><span class="pill ${r.layer==='bronze'?'amber':r.layer==='silver'?'':'green'}">${r.layer}</span></td><td>${r.table_name}</td><td><b>${r.expectation}</b></td><td class="muted" style="font-size:11px">${r.predicate}</td><td>${r.passing_records}</td><td style="${Number(r.failing_records)>0?'color:#dc2626;font-weight:700':''}">${r.failing_records}</td><td>${pct(r.pass_rate_pct)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">scorecard building…</td></tr>'}</tbody></table>`;
   }).catch(()=>{$("#ing-rules").innerHTML='<span class="muted">scorecard unavailable</span>';});
-  api("/ingestion/feeds").then(d=>{$("#ing-feeds").innerHTML=`<table><thead><tr><th>Feed</th><th>Type</th><th>Source</th><th>Rows</th><th>DQ%</th><th>Status</th></tr></thead><tbody>${
-    (d.feeds||[]).map(f=>`<tr><td><b>${f.name}</b></td><td><span class="pill" style="background:${(TYPE_COL[f.type]||'#475569')}1a;color:${TYPE_COL[f.type]||'#475569'}">${f.type}</span></td><td class="muted">${f.source}</td><td>${Number(f.rows).toLocaleString('en-GB')}</td><td>${f.dq_pct!=null?pct(f.dq_pct):'—'}</td><td><span class="pill ${f.status}">${f.status==='green'?'clean':'review'}</span></td></tr>`).join('')}</tbody></table>`;}).catch(()=>{});
+  loadStorm();
+  api("/ingestion/sources").then(renderSources).catch(()=>{$("#ing-sources").innerHTML='<span class="muted">source catalogue unavailable</span>';});
   api("/ingestion/document").then(d=>{const ex=d.extractions||[];const top=ex[0],low=ex[ex.length-1];
     const card=(e,tag)=>e?`<div class="card" style="background:#faf5ff"><div class="eyebrow">${tag} · confidence ${e.extraction_confidence}</div>
       <div class="grid g2" style="gap:12px"><div><div class="muted" style="font-size:10.5px">RAW SLIP (excerpt)</div><pre style="white-space:pre-wrap;font-size:10.5px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;max-height:200px;overflow:auto">${(e.slip_excerpt||'').replace(/</g,'&lt;')}</pre></div>
@@ -724,6 +752,41 @@ ORDER  BY layer, table_name;</div></div></div>
     (d.zones||[]).slice(0,8).map(z=>`<tr><td>${z.zone_id}</td><td>${z.cresta}</td><td>${eurm(z.total_tiv_eur)}</td><td>${z.n_locations}</td><td>${z.h3_cells}</td></tr>`).join('')}</tbody></table><div class="muted" style="font-size:11px;margin-top:6px">TIV binned with <code>h3_longlatash3</code> (GA geospatial) and rolled up by CRESTA.</div>`;}).catch(()=>{$("#ing-geo").innerHTML='<h3>Geospatial accumulation</h3><span class="muted">building…</span>';});
   api("/ingestion/quarantine").then(d=>{const q=d.quarantine||{};const sec=Object.keys(q).map(k=>`<div style="margin-top:6px"><b style="font-size:12px">${k}</b> ${(q[k]||[]).map(r=>`<div class="kv"><span class="muted">${r.id||''} · ${(r.detail||'').toString().slice(0,40)}</span><span class="pill red">${r.reason}</span></div>`).join('')||'<span class="muted"> none</span>'}</div>`).join('');
     $("#ing-quar").innerHTML=`<h3>Quarantine — nothing silently lost</h3>${sec}`;}).catch(()=>{$("#ing-quar").innerHTML='<h3>Quarantine</h3><span class="muted">building…</span>';});}
+
+// ── Live event radar (near-real-time storm tracking; mock feed) ──
+async function loadStorm(){clearInterval(STORM_T);try{STORM=await api("/ingestion/storm");}catch(e){return;}STORM_I=0;renderStorm();}
+function stormGo(i){clearInterval(STORM_T);STORM_I=i;renderStorm();}
+function stormPlay(){clearInterval(STORM_T);STORM_I=0;renderStorm();STORM_T=setInterval(()=>{if(!STORM||STORM_I>=STORM.frames.length-1){clearInterval(STORM_T);return;}STORM_I++;renderStorm();},1300);}
+function renderStorm(){const c=$("#stormCard");if(!c||!STORM)return;const F=STORM.frames,f=F[STORM_I],last=F.length-1;
+  const track=F.map((fr,i)=>`<div class="fr ${i===STORM_I?'on':''}" onclick="stormGo(${i})"><div class="ft">${fr.t}</div><div class="fp">${fr.phase}</div></div>`).join('');
+  c.innerHTML=`<div class="top"><span class="live-dot"></span><b style="font-size:16px">Live event radar — ${STORM.event}</b>
+     <span class="muted" style="color:#94a3b8">${STORM.region} · ${STORM.feed}</span>
+     <span class="stat mock" style="margin-left:auto">MOCK feed</span></div>
+    <div class="track">${track}</div>
+    <div class="panel">
+      <div><div class="v">${f.wind_kph?f.wind_kph+' <span style="font-size:12px">kph</span>':'—'}</div><div class="l">Peak wind</div></div>
+      <div><div class="v">${eurm(f.exposed_tiv_eur)}</div><div class="l">Exposed TIV in cone</div></div>
+      <div><div class="v">${f.exposed_cedants}</div><div class="l">Cedants exposed</div></div>
+      <div><div class="v" style="color:${Number(f.modelled_net_eur)>0?'#fca5a5':'#cbd5e1'}">${eurm(f.modelled_net_eur)}</div><div class="l">Day-one modelled net loss</div></div>
+    </div>
+    <div class="snote">${f.fire_event?'⚡ ':''}${f.note}</div>
+    <div class="ctrls">
+      <button onclick="stormPlay()">▶ Replay storm</button>
+      <button onclick="stormGo(Math.min(STORM_I+1,${last}))">Step →</button>
+      ${(f.fire_event||STORM_I>=3)?`<button class="fire" onclick="location.hash='#event'">Open the Cat Event response →</button>`:''}
+      <span class="muted" style="color:#94a3b8;margin-left:auto">frame ${STORM_I+1}/${F.length} · footprint streamed in → matched to in-force limits live</span>
+    </div>`;}
+
+// ── Source catalogue (grouped by purpose; live feeds show rows+DQ, new ones flagged mock) ──
+function renderSources(d){const el=$("#ing-sources");if(!el)return;
+  const badge=s=>`<span class="stat ${s}">${s}</span>`;
+  const grp=g=>`<div class="srcgrp"><div class="gh"><span style="font-size:15px">${g.icon}</span> <b>${g.group}</b> <span class="why">${g.why}</span></div>
+    <div class="card" style="padding:4px 0"><table><thead><tr><th>Source</th><th>Method</th><th>Cadence</th><th>Rows</th><th>DQ%</th><th>Status</th></tr></thead><tbody>${
+    g.sources.map(s=>`<tr><td><b>${s.name}</b>${s.note?`<div class="muted" style="font-size:11px">${s.note}</div>`:''}</td><td class="muted" style="font-size:12px">${s.method}</td><td class="muted">${s.cadence}</td><td>${s.rows!=null?Number(s.rows).toLocaleString('en-GB'):'—'}</td><td>${s.dq_pct!=null?pct(s.dq_pct):'—'}</td><td>${badge(s.status)}</td></tr>`).join('')}</tbody></table></div></div>`;
+  el.innerHTML=`<div class="card" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;background:#0f172a;color:#fff;border:0;margin-top:16px">
+     <div><div class="eyebrow" style="color:#c4b5fd">Source catalogue</div><div class="big" style="color:#fff">${d.n_live} live · ${d.n_mock} ready to wire</div><div class="muted" style="color:#cbd5e1">grouped by what they are for</div></div>
+     <div class="muted" style="color:#cbd5e1;max-width:540px;font-size:12.5px">${d.note||''}</div></div>
+    ${(d.groups||[]).map(grp).join('')}`;}
 
 // ─────────── Reinsurance AI roster ───────────
 const AIGLYPH={supervisor:'🧠',genie:'💬',tool:'⚙️'};

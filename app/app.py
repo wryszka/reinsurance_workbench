@@ -335,6 +335,80 @@ def ingestion_geo():
         ORDER BY total_tiv_eur DESC""")}
 
 
+# ─────────── source catalogue (the full ingestion picture; new sources are MOCK, expandable) ───────────
+# status: live = a real feed in this demo (row count + DQ pulled); mock = illustrative, not yet wired; roadmap = pattern.
+_SOURCE_GROUPS = [
+    {"group": "Submission intake", "icon": "📨", "why": "Turn what brokers send into structured, priceable risk.", "sources": [
+        {"name": "MRC slips", "method": "Auto Loader + ai_query (Document AI)", "cadence": "event-driven", "status": "live", "table": "bronze_mrc_submissions", "note": "Unstructured slips → fields; low-confidence quarantined."},
+        {"name": "ADEPT / CDR structured feed", "method": "Auto Loader (cloudFiles)", "cadence": "daily", "status": "live", "table": "bronze_submissions", "note": "Clean market-standard submission feed."},
+        {"name": "Broker email / portal", "method": "Mailbox → Volume + Document AI", "cadence": "event-driven", "status": "mock", "note": "Inbound attachments auto-read."}]},
+    {"group": "Pricing & model build", "icon": "📊", "why": "The history and exposure that train the pricing & triage models.", "sources": [
+        {"name": "Premium bordereaux", "method": "Auto Loader (schema rescue)", "cadence": "monthly/quarterly", "status": "live", "table": "bronze_premium_bordereaux"},
+        {"name": "Loss bordereaux", "method": "Auto Loader (schema-drift rescue)", "cadence": "monthly/quarterly", "status": "live", "table": "bronze_loss_bordereaux"},
+        {"name": "Exposure / SOV (locations, TIV)", "method": "read_files + h3", "cadence": "per renewal", "status": "live", "table": "bronze_exposure"},
+        {"name": "Cat vendor EP curves (ELT/YLT)", "method": "read_files (Parquet)", "cadence": "vendor release", "status": "live", "table": "cat_vendor_curves"},
+        {"name": "Historical event catalogue (stochastic set)", "method": "read_files (Parquet)", "cadence": "annual", "status": "mock"},
+        {"name": "Industry loss indices (PCS / PERILS)", "method": "REST API → Delta", "cadence": "per event", "status": "mock"},
+        {"name": "Claims / social-inflation indices", "method": "REST API → Delta", "cadence": "monthly", "status": "mock"}]},
+    {"group": "Live event & real-time response", "icon": "🌀", "why": "Know the storm has hit — and react in minutes, not days.", "sources": [
+        {"name": "Windstorm tracks & footprints (ECMWF · Met Office · DWD)", "method": "Structured Streaming (Kafka)", "cadence": "streaming · minutes", "status": "live", "table": "bronze_event_footprint", "note": "Drives the live storm radar above."},
+        {"name": "Real-time wind-speed grids", "method": "Auto Loader (continuous, GRIB→Delta)", "cadence": "streaming", "status": "mock"},
+        {"name": "Vendor real-time event feeds (RMS HWind · Verisk Respond)", "method": "REST / stream → Delta", "cadence": "per event", "status": "mock"},
+        {"name": "Flood gauges & river levels", "method": "Structured Streaming (Kinesis)", "cadence": "streaming · minutes", "status": "mock"},
+        {"name": "Earthquake feed (USGS)", "method": "REST API → Delta", "cadence": "streaming", "status": "mock"},
+        {"name": "Wildfire hotspots (NASA FIRMS)", "method": "REST API → Delta", "cadence": "streaming", "status": "mock"},
+        {"name": "Satellite / aerial imagery", "method": "Volumes + ai_query (vision)", "cadence": "per event", "status": "mock"}]},
+    {"group": "Counterparty & compliance", "icon": "🛡️", "why": "Who we're trading with — and whether we're allowed to.", "sources": [
+        {"name": "Credit ratings (S&P / AM Best)", "method": "REST API → Delta", "cadence": "daily", "status": "mock"},
+        {"name": "Sanctions / watchlists (OFAC · EU · UK)", "method": "List ingest + screen", "cadence": "daily", "status": "mock"},
+        {"name": "ESG / climate-risk scores", "method": "REST API → Delta", "cadence": "quarterly", "status": "mock"}]},
+    {"group": "Reference & enrichment", "icon": "🗺️", "why": "The shared dimensions everything joins to.", "sources": [
+        {"name": "FX rates", "method": "REST API → Delta", "cadence": "daily", "status": "mock"},
+        {"name": "CRESTA / admin boundaries", "method": "read_files (geo)", "cadence": "annual", "status": "mock"},
+        {"name": "Peril & coverage reference", "method": "read_files", "cadence": "ad-hoc", "status": "mock"}]},
+]
+
+
+@app.get("/api/ingestion/sources")
+def ingestion_sources():
+    dq = {r["table_name"]: r for r in sql.query(f"""SELECT table_name, round(avg(pass_rate_pct),1) dq_pct
+          FROM {config.fqn('gold_dq_scorecard')} GROUP BY table_name""")}
+    groups = []
+    n_live = n_mock = 0
+    for g in _SOURCE_GROUPS:
+        srcs = []
+        for s in g["sources"]:
+            row = dict(s)
+            if s["status"] == "live":
+                n_live += 1
+                if s.get("table"):
+                    try:
+                        row["rows"] = (sql.query_one(f"SELECT count(*) c FROM {config.fqn(s['table'])}") or {}).get("c")
+                    except Exception:
+                        row["rows"] = None
+                    d = dq.get(s["table"], {})
+                    row["dq_pct"] = d.get("dq_pct")
+            else:
+                n_mock += 1
+            srcs.append(row)
+        groups.append({**g, "sources": srcs})
+    return {"groups": groups, "n_live": n_live, "n_mock": n_mock,
+            "note": "Live = a real feed in this demo (row count + DQ shown). Mock = illustrative, ready to wire. The platform pattern (Auto Loader, Structured Streaming, read_files, ai_query, Volumes) is identical for all of them."}
+
+
+@app.get("/api/ingestion/storm")
+def ingestion_storm():
+    # MOCK near-real-time windstorm track (Windstorm Eckhart) — lands on the same net loss as the Cat Event page.
+    return {"event": "Windstorm Eckhart", "region": "NW Europe", "feed": "ECMWF/Met-Office footprint via Kafka → Auto Loader",
+            "frames": [
+                {"t": "T-36h", "phase": "Forming", "wind_kph": 90, "exposed_tiv_eur": 0, "exposed_cedants": 0, "modelled_net_eur": 0, "note": "Vendor track feed picks up a developing Atlantic low — no exposure in the cone yet."},
+                {"t": "T-18h", "phase": "Intensifying", "wind_kph": 140, "exposed_tiv_eur": 2.1e9, "exposed_cedants": 4, "modelled_net_eur": 0, "note": "Footprint cone overlaps Benelux / NW-France CRESTA zones — exposure flagged."},
+                {"t": "T-6h", "phase": "Approaching landfall", "wind_kph": 165, "exposed_tiv_eur": 4.8e9, "exposed_cedants": 11, "modelled_net_eur": 38e6, "note": "Wind field firms up — first modelled loss on the exposed windstorm XoL layers."},
+                {"t": "T-0", "phase": "Landfall", "wind_kph": 175, "exposed_tiv_eur": 6.2e9, "exposed_cedants": 18, "modelled_net_eur": 133e6, "fire_event": True, "note": "Landfall. 22 treaties respond — the book-wide Cat Event response fires automatically."},
+                {"t": "T+12h", "phase": "Post-event", "wind_kph": 120, "exposed_tiv_eur": 6.2e9, "exposed_cedants": 18, "modelled_net_eur": 131e6, "note": "Footprint refines; modelled loss stabilises. Reinstatement notices issued."},
+                {"t": "T+2w", "phase": "Cedant reports", "wind_kph": 0, "exposed_tiv_eur": 6.2e9, "exposed_cedants": 18, "modelled_net_eur": 131e6, "note": "Cedant-reported losses begin replacing the day-one modelled view as claims develop."}]}
+
+
 # ─────────────────────────── governance ───────────────────────────
 @app.get("/api/governance/inventory")
 def gov_inventory():
