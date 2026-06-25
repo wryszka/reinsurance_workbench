@@ -26,6 +26,7 @@ App: **https://reinsurance-workbench-7474656169654171.aws.databricksapps.com**
 - **Prove every number** — every headline tile drills to the rows it is computed from, the source UC table/function, and the SQL. Nothing is a hardcoded mockup.
 - **Govern the whole thing** — one governed copy of the data surfaced many ways by role; real lineage, masking, model versions, an AI-activity trail, and a full end-to-end track of any deal — the regulator-readable view.
 - **One platform instead of five** — ingestion, pricing, accumulation, capital, AI and governance in one place; we own the boundaries around the cat models and placement, we never rebuild them.
+- **Orchestrate, don't replace** — Databricks is the high-speed chassis *between* your existing systems: it packages the slip, calls your cat model (Verisk Touchstone) and capital model (WTW Igloo / Tyche), and brings the regulator-approved numbers back to the desk in seconds. We connect your engines at the speed of the desk; we don't ask you to rip them out. *(The engine calls are mocked in this demo; the orchestration pattern — Workflows + Auto Loader + UC functions wrapping the APIs — is the production design.)*
 
 **Built on standard Databricks:** Lakeflow Declarative Pipelines (DLT) + Unity Catalog, the Feature Store, MLflow Model Registry + Model Serving, Unity Catalog functions, a Mosaic AI tool-calling agent (Claude via the Foundation Model API), Document AI (`ai_query`), AI/BI Genie, and Databricks Apps. *Bricksurance Re is synthetic; cat-model and capital figures are illustrative — in production these functions integrate the vendor cat models and the capital engine.*
 
@@ -60,6 +61,7 @@ European **windstorm cat XoL, €30m xs €20m**, reputable cedant (Helvetia, AA
 - **Accumulation — RED.** The capacity bar **overflows past the appetite line**: +€28.7m of windstorm PML → **breaches appetite by €16.7m**, and it's **correlated with 3 in-force treaties** (named).
 - **What-if slider** — drag the limit down and the breach re-prices live on `fn_accumulation_whatif`.
 - **Capital — RED.** Marginal SCR far exceeds the deal's expected return: **RoRAC 8.7% vs a 15% hurdle — capital-destructive.**
+- **Watch the orchestration.** Triggering the crux shows Databricks packaging the slip and calling your engines — *Verisk Touchstone* for the marginal YELT, then *WTW Igloo* for the marginal SCR and RoRAC — and bringing the numbers back. *"What usually takes an underwriter, a cat modeller and an actuary three days, orchestrated in three seconds. We let your engines do the math; we're the chassis connecting them."* (Mocked here; the pattern is real.)
 - **"Show the UC calls"** — expand it: every card on the page is one Unity Catalog function call (`fn_triage_submission`, `fn_price_submission`, `fn_accumulation_impact`, `fn_capital_impact`, `fn_recommendation`). Nothing is hardcoded in the app.
 - **The AI supervisor** (a real tool-calling agent) returns the call: **REFER** — attractive alone, toxic in aggregate. Click **Refer** to log the decision (it MERGEs into the governance audit trail).
 
@@ -88,8 +90,8 @@ The feed map shows every source by type — structured, vendor cat output, geosp
 Five short, persona-led journeys. Each is a single "moment" you can run in under 90 seconds; pick the two or three that fit the room.
 
 ### Story 1 — "The deal that would have broken the book" *(Underwriter / Head of UW)*
-*As an underwriter on the 1-Jan renewal, I want to know if a great-looking deal is safe for the whole book.* Open `sub:900002`: 56% combined ratio, adequate price — **every instinct says write it.** Then the crux fires — **+€28.7m into a peak zone already at 97.6%, breaches appetite by €16.7m, RoRAC 8.7% vs a 15% hurdle.** The supervisor returns **REFER**.
-> **Wow:** *the deal that would have quietly broken the book, caught in seconds — before bind, not at year-end.*
+*As an underwriter on the 1-Jan renewal, I want to know if a great-looking deal is safe for the whole book.* Open `sub:900002`: 56% combined ratio, adequate price — **every instinct says write it.** Hit the crux and watch the orchestration: Databricks packages the structured slip, pushes it to a mocked **Verisk Touchstone** for the marginal windstorm loss, then passes that straight to a mocked **WTW Igloo** engine for the exact capital hit — **+€28.7m into a peak zone already at 97.6%, breaches appetite by €16.7m, RoRAC 8.7% vs a 15% hurdle.** The supervisor returns **REFER**.
+> **Wow:** *It orchestrated what usually takes an underwriter, a cat modeller and an actuary three days — in three seconds. We let your engines do the math; we're the high-speed chassis connecting them. The deal that would have quietly broken the book is caught before bind.*
 
 ### Story 2 — "Prove it" *(CRO / board)*
 *As a CRO, when I put a number in front of the board, I have to be able to defend it.* On the Control Tower, the windstorm zone is RED at 97.6%. A board member asks *"how do you know that's right?"* Click the tile: it's the **sum of 23 named in-force treaties (= €488m)**, the three vendor curves it blends, the source tables, the build time, and the SQL.
