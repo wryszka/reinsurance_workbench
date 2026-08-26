@@ -805,3 +805,9 @@ def root():
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+# --- MCP server: the full workbench surface as governed tools (control-tower client) ---
+import sys as _sys
+from server import mcp as _mcp
+app.include_router(_mcp.register(_sys.modules[__name__]))

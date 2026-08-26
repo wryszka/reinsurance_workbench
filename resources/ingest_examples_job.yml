@@ -1,0 +1,19 @@
+resources:
+  jobs:
+    reinsurance_90_ingestion_examples:
+      name: reinsurance_90_ingestion_examples
+      tags:
+        project: reinsurance_workbench
+      tasks:
+        - task_key: ingestion_examples
+          notebook_task:
+            notebook_path: ../notebooks/90_ingestion_examples.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ex
+      environments:
+        - environment_key: ex
+          spec:
+            client: "5"
+            dependencies: []
